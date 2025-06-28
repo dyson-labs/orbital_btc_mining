@@ -1,0 +1,5 @@
+vehicle,orbit_class,max_payload_kg,cost_per_kg_usd
+Falcon 9,LEO,22800,3000
+Falcon 9,GTO,8300,7000
+Falcon 9,GEO,4000,9000
+Electron,LEO,300,20000
