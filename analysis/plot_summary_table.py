@@ -61,25 +61,31 @@ def plot_summary_table_to_buffer(
         'axes.titlesize': 14 * font_scale
     })
     fig, axes = plt.subplots(n_rows, 1, figsize=(fig_width, fig_height))
-    fig.subplots_adjust(left=0.15, right=0.98, hspace=1.25, top=0.90, bottom=0.12)
-
+    fig.subplots_adjust(left=0.05, right=0.9, hspace=1.25, top=0.90, bottom=0.12)
     # --- Main title at the top of the figure ---
-    fig.suptitle("Comparison of Orbits within Database", fontsize=30 * font_scale, fontweight='bold', y=0.98)
+    fig.suptitle("   Comparison of Orbits within Database", fontsize=28 * font_scale, fontweight='bold', y=0.98)
 
     def short_label(s):
         return s if len(s) <= max_label_len else s[:max_label_len - 1] + "…"
     labels = [short_label(l) for l in df["Orbit Label"]]
 
-    # --- Draw bars for each metric ---
+
+    # --- Draw bars for each metric, with dummy left bar for margin ---
     for i, m in enumerate(metrics):
         vals = df[m].astype(float)
         best = vals.max() if maximize[m] else vals.min()
-        bar_colors = [
+        # --- Add dummy value for left margin ---
+        bar_vals = np.insert(vals.values, 0, 0)
             '#FFD700' if idx == best_idx else
             ('#90ee90' if abs(v - best) < 1e-6 and idx != best_idx else '#26415B')
             for idx, v in enumerate(vals)
         ]
-        axes[i].bar(range(len(df)), vals, color=bar_colors, width=0.7)
+#<<<<<<< HEAD
+#        axes[i].bar(range(len(df)), vals, color=bar_colors, width=0.7)
+#=======
+        axes[i].bar(range(len(bar_vals)), bar_vals, color=bar_colors, width=0.7)
+        axes[i].set_xlim(-0.5, len(bar_vals)-0.5)  # Show all bars including dummy
+#>>>>>>> 6c39a73 (Initial production push)
         axes[i].set_title(m, loc='left', fontsize=13 * font_scale, fontweight='bold')
         axes[i].set_xticks([])
         axes[i].set_yticks([])
@@ -88,14 +94,21 @@ def plot_summary_table_to_buffer(
 
     # --- Weighted Score (last plot, with labels/annotation) ---
     ax = axes[-1]
-    ax.bar(range(len(df)), df["Weighted Score"], color=[
+    bar_vals = np.insert(df["Weighted Score"].values, 0, 0)
+    bar_colors = ['white'] + [
         '#FFD700' if idx == best_idx else '#26415B' for idx in range(len(df))
-    ], width=0.7)
+    ]
+    ax.bar(range(len(bar_vals)), bar_vals, color=bar_colors, width=0.7)
+    ax.set_xlim(-0.5, len(bar_vals)-0.5)
     ax.set_title("Weighted Score by Orbit", loc='left', fontsize=14 * font_scale, fontweight='bold')
     ax.set_yticks([])
 
     # --- Short orbit labels under bars ---
-    ax.set_xticks(range(len(df)))
+#<<<<<<< HEAD
+ #   ax.set_xticks(range(len(df)))
+#=======
+    ax.set_xticks(range(1, len(bar_vals)))  # skip dummy
+#>>>>>>> 6c39a73 (Initial production push)
     ax.set_xticklabels(labels, fontsize=11 * font_scale, rotation=32, ha='right')
 
     # --- Annotation: Arrow + text above best bar ---
@@ -103,8 +116,8 @@ def plot_summary_table_to_buffer(
     y_annot = ymax + 0.10 * (ymax if ymax > 1 else 1)
     ax.annotate(
         "Best Orbit in Database",
-        xy=(best_idx, df.loc[best_idx, "Weighted Score"]),
-        xytext=(best_idx, y_annot),
+        xy=(best_idx+1, df.loc[best_idx, "Weighted Score"]),  # +1 for dummy bar offset
+        xytext=(best_idx+1, y_annot),
         textcoords='data',
         ha='center',
         va='bottom',
@@ -119,7 +132,7 @@ def plot_summary_table_to_buffer(
 
     # --- Export to buffer ---
     buf = io.BytesIO()
-    fig.savefig(buf, format='png', bbox_inches='tight', dpi=230)
+    fig.savefig(buf, format='png', dpi=230)
     plt.close(fig)
     buf.seek(0)
     return buf

@@ -14,12 +14,13 @@ def run_thermal_eclipse_model(
     verbose=VERBOSE
 ):
     layers = [
-        {"name": "Silicon solar cells", "thickness": 0.02, "rho": 2320.0, "cp": 800.0, "k": 150.0, "Q": 0.0},
-        {"name": "Thermal compound 1", "thickness": 0.02, "rho": 2100.0, "cp": 1000.0, "k": 1.5, "Q": 0.0},
-        {"name": "FR4 circuit board",  "thickness": 0.126, "rho": 1850.0, "cp": 820.0, "k": 150, "Q": 9.0/0.063},
-        {"name": "Thermal compound 2", "thickness": 0.02, "rho": 2100.0, "cp": 1000.0, "k": 1.5, "Q": 0.0},
-        {"name": "Aluminum radiator",  "thickness": 0.032, "rho": 2700.0, "cp": 877.0, "k": 205.0, "Q": 0.0}
+        {"name": "Silicon solar cells", "thickness": 0.0002, "rho": 2320.0, "cp": 800.0, "k": 150.0, "Q": 0.0},
+        {"name": "Thermal compound 1", "thickness": 0.001, "rho": 2100.0, "cp": 1000.0, "k": 1.5, "Q": 0.0},
+        {"name": "FR4 circuit board",  "thickness": 0.003, "rho": 1850.0, "cp": 820.0, "k": 150, "Q": 9.0/0.003},
+        {"name": "Thermal compound 2", "thickness": 0.001, "rho": 2100.0, "cp": 1000.0, "k": 1.5, "Q": 0.0},
+        {"name": "Aluminum radiator",  "thickness": 0.002, "rho": 2700.0, "cp": 877.0, "k": 205.0, "Q": 0.0}
     ]
+    
     L_total = sum(layer["thickness"] for layer in layers)
     N       = 31
     dx      = L_total / (N - 1)
@@ -56,7 +57,7 @@ def run_thermal_eclipse_model(
     eps_top    = 0.9
     eps_bot    = 0.85
     A_top      = 0.3
-    A_bot      = 0.5
+    A_bot      = 0.3
 
     # Build time/illumination arrays
     if illumination_profile is not None:
@@ -133,7 +134,7 @@ def run_thermal_eclipse_model(
         ax.set_xlabel("Thickness (m)")
         ax.set_ylabel("Time (hours)")
         ax.set_zlabel("Temperature (K)")
-        ax.set_title("Temperature Evolution with Eclipse Cycles")
+        ax.set_title("Temperature Evolution | Mining Integrated Panel")
         fig.colorbar(surf, shrink=0.5, aspect=10, label="Temperature (K)")
         plt.tight_layout()
         thermal_buf = io.BytesIO()

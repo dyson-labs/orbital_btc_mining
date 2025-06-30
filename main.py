@@ -1,15 +1,104 @@
-# --------- User-supplied fields (placeholders, e.g., from web form) ---------
+import sys
+print("INITIAL sys.path:")
+for i, p in enumerate(sys.path):
+    print(f"{i}: {p}")
+dev_path = r"C:\Users\elder\OneDrive\Desktop\LOCAL Dyson\Python\btc_orbital_trade_study_dev"
+if dev_path not in sys.path:
+    sys.path.insert(0, dev_path)
+print("AFTER INSERT sys.path (first 3):", sys.path[:3])
+
+
+# --------- User-supplied fields (for testing/demo) ---------
 form_name = "Jane Doe"
 form_email = "jane@user.com"
-# ---------------------------------------------------------------------------
+
+# Example: Gather these from user input or Google Sheet
+launch_regime = "early"
+geo_isr_relay = True  # <-- Set based on user input
+
+# ---- Select a satellite class for test ----
+sat_class_lookup = {
+    "cubesat": dict(
+        payload_mass_kg=1,
+        power_w=40,
+        solar_area_m2=0.015,
+        desc="CubeSat-class",
+        asic_count=3,
+    ),
+    "espa": dict(
+        payload_mass_kg=150,
+        power_w=2200,
+        solar_area_m2=8,
+        desc="ESPA-class",
+        asic_count=240,
+    ),
+    "mw": dict(
+        payload_mass_kg=10_000,
+        power_w=1_000_000,
+        solar_area_m2=3_640,
+        desc="MW-class",
+        asic_count=111_111,
+    ),
+    "40mw": dict(
+        payload_mass_kg=100_000,
+        power_w=40_000_000,
+        solar_area_m2=145_454,
+        desc="MMW-class",
+        asic_count=4_444_444,
+    ),
+}
+
+satellite_class = "40mw"  # options: "cubesat", "espa", "mw", "40mw"
+
+sat_cost_lookup = {
+    "cubesat": dict(
+        bus_cost=60_000,
+        payload_cost=60_000,
+        integration_cost=45_000,
+        comms_cost=100_000,
+        overhead=160_000,
+        contingency=0.25
+    ),
+    "espa": dict(
+        bus_cost=300_000,
+        payload_cost=150_000, 
+        integration_cost=250_000,
+        comms_cost=500_000,
+        overhead=750_000,
+        contingency=0.20
+    ),
+    "mw": dict(
+        bus_cost=10_000_000,
+        payload_cost=1_700_000,
+        integration_cost=5_000_000,
+        comms_cost=8_000_000,
+        overhead=8_000_000,
+        contingency=0.15
+    ),
+    "40mw": dict(
+        bus_cost=15_000_000,
+        payload_cost=75_000_000,
+        integration_cost=10_000_000,
+        comms_cost=8_000_000,
+        overhead=15_000_000,
+        contingency=0.15
+    ),
+}
+
+sat_costs = sat_cost_lookup.get(satellite_class, sat_cost_lookup["cubesat"])
 
 import json
 import pandas as pd
 import numpy as np
+import os
 from orbits.eclipse import OrbitEnvironment
 from radiation.tid_model import RadiationModel
 from power.power_model import PowerModel
-from launch.launch_model import LaunchModel
+
+print("LaunchModel loaded from:", LaunchModel.__module__)
+import launch.launch_model
+print("launch_model path:", launch.launch_model.__file__)
+
 from analysis.plot_summary_table import plot_summary_table_to_buffer
 from astropy import units as u
 from costmodel.cost import run_cost_model
@@ -49,22 +138,28 @@ def orbit_label(orbit: dict, alt, inc):
         return f"{int(round(alt))} km / {inc:.1f}°"
     return "Unknown"
 
-def load_orbit_configs(path: str = "config/orbits_to_test.json") -> list:
+
+def load_orbit_configs(path: str = None) -> list:
+    if path is None:
+        root = os.path.dirname(os.path.abspath(__file__))
+        path = os.path.join(root, "config", "orbits_to_test.json")
     with open(path, "r") as f:
         return json.load(f)
 
-def run_simulation(return_df: bool = False, verbose: bool = False):
+def run_simulation(return_df=True, verbose=False,
+                   launch_regime="current", payload_mass_kg=1, power_w=40, solar_area_m2=2, geo_isr_relay=False):
+
     orbits          = load_orbit_configs()
     radiation_model = RadiationModel()
     power_model     = PowerModel()
     launch_model    = LaunchModel()
-    payload_mass_kg = 1
+
     all_results     = []
 
     for orbit in orbits:
         if verbose:
             print("\n--- ORBIT CONFIG ---")
-        # Build environment (env)
+
         if "tle_lines" in orbit:
             name = orbit.get("name", "Unnamed TLE Orbit")
             env = OrbitEnvironment(tle_lines=orbit["tle_lines"])
@@ -115,7 +210,10 @@ def run_simulation(return_df: bool = False, verbose: bool = False):
             "SEU Risk"            : rad["seu_rating"],
             "Launch Cost"         : launch_cost_str,
             "Launch Cost ($)"     : launch_cost_num,
-            "tle_lines"           : orbit.get("tle_lines", None)  # <-- Add TLE lines if present
+            "tle_lines"           : orbit.get("tle_lines", None),
+            "Payload Mass (kg)"   : payload_mass_kg,
+            "Power (W)"           : power_w,
+            "Solar Area (m²)"     : solar_area_m2,
         }
         all_results.append(result)
         if verbose:
@@ -126,12 +224,23 @@ def run_simulation(return_df: bool = False, verbose: bool = False):
     if return_df:
         return df
 
-# ---------------------------------------------------------------------------
-# Script entry-point
-# ---------------------------------------------------------------------------
-# Script entry-point
 if __name__ == "__main__":
-    df = run_simulation(return_df=True, verbose=VERBOSE)
+    # geo_isr_relay should be set by user input, not hardcoded
+    # geo_isr_relay = user_input["geo_isr_relay"] or however you get it
+
+    sat_params = sat_class_lookup.get(satellite_class, sat_class_lookup["cubesat"])
+    sat_costs = sat_cost_lookup.get(satellite_class, sat_cost_lookup["cubesat"])
+
+    # --- HERE IS THE KEY --- #
+    # geo_isr_relay is passed directly from user input
+    df = run_simulation(
+        return_df=True, verbose=VERBOSE,
+        launch_regime=launch_regime,
+        payload_mass_kg=sat_params["payload_mass_kg"],
+        power_w=sat_params["power_w"],
+        solar_area_m2=sat_params["solar_area_m2"],
+        geo_isr_relay=geo_isr_relay
+    )
     valid = df.dropna(subset=["Altitude (km)", "Inclination (deg)", "Launch Cost ($)"])
     plot_summary_table_to_buffer(valid)
 
@@ -147,11 +256,67 @@ if __name__ == "__main__":
     valid["Weighted Score"] = score
     best_idx = valid["Weighted Score"].idxmax()
     best_row = valid.loc[best_idx]
-
     # Run cost model
     solar_fraction = float(best_row["Sunlight Fraction"])
     capex_opex = {"bus_cost": 60000, "payload_cost": 60000, "launch_cost": 130000, "integration_cost": 45000, "comms_cost": 100000, "overhead": 160000, "contingency": 0.25, "btc_price": 105000}
     cost_data = run_cost_model(solar_fraction, **capex_opex)
+    # RF Model & Mining Efficiency Regime Logic
+    rf_dict = full_rf_visibility_simulation(
+        tle=best_row["tle_lines"],
+        uplink_bps=10000,
+        downlink_bps=10000,
+        duration_days=30,
+        verbose=False
+    )
+    rf_downlink = rf_dict.get("downlink_fraction", 0.25)
+    rf_uplink   = rf_dict.get("uplink_fraction", 0.5)
+
+    if geo_isr_relay:
+        downlink_fraction = 1.0
+        uplink_fraction = 1.0
+        rf_dict["Note"] = "GEO/ISR relay enabled: comms/mining at 100% regardless of regime/orbit."
+    elif launch_regime == "late":
+        downlink_fraction = 1.0
+        uplink_fraction = 1.0
+        rf_dict["Note"] = "Late regime: comms/mining at 100%."
+    elif launch_regime == "early":
+        downlink_fraction = 0.5 * rf_downlink + 0.5
+        uplink_fraction   = 0.5 * rf_uplink + 0.5
+        rf_dict["Note"] = "Early regime: comms/mining 50% orbit-based, 50% ideal."
+    else:  # current
+        downlink_fraction = rf_downlink
+        uplink_fraction = rf_uplink
+        rf_dict["Note"] = "Current regime: comms/mining from orbit/network only."
+
+    effective_comms_fraction = min(downlink_fraction, uplink_fraction)
+    solar_fraction = float(best_row["Sunlight Fraction"])
+    mining_fraction = solar_fraction * effective_comms_fraction
+
+    # --- Update RF summary for the PDF ---
+    rf_dict["Effective Comms Fraction (%)"] = f"{effective_comms_fraction*100:.1f}%"
+    rf_dict["Regime-Adjusted Mining Fraction (%)"] = f"{mining_fraction*100:.1f}%"
+    rf_dict["Launch Regime"] = launch_regime.title()
+    rf_dict["GEO/ISR Relay Enabled"] = "Yes" if geo_isr_relay else "No"
+
+    # Print for debug
+    print(f"geo_isr_relay: {geo_isr_relay}")
+    print(f"sunlight_fraction: {solar_fraction}")
+    print(f"effective_comms_fraction: {effective_comms_fraction}")
+    print(f"mining_fraction (input to cost model): {mining_fraction}")
+
+    # Run cost model (uses mining_fraction, not solar_fraction!)
+    capex_opex = {
+        "bus_cost": sat_costs["bus_cost"],
+        "payload_cost": sat_costs["payload_cost"],
+        "launch_cost": float(best_row["Launch Cost ($)"]),
+        "integration_cost": sat_costs["integration_cost"],
+        "comms_cost": sat_costs["comms_cost"],
+        "overhead": sat_costs["overhead"],
+        "contingency": sat_costs["contingency"],
+        "btc_price": 105000,
+        "asic_count": sat_params["asic_count"],
+    }
+    cost_data = run_cost_model(mining_fraction, **capex_opex)
 
     cost_dict = {
         "Bus": f"${cost_data['bus_cost']:,.0f}",
@@ -173,7 +338,7 @@ if __name__ == "__main__":
     # Thermal Model
     T_hist, x, thermal_plot_buf, temp_stats = run_thermal_eclipse_model(
         orbit_period_s=5400,
-        eclipse_duration_s=1800,
+        eclipse_duration_s=0,
         t_total=5 * 5400,
         dt=1.0,
         plot3d=True,
@@ -204,7 +369,16 @@ if __name__ == "__main__":
             "Altitude (km)": best_row['Altitude (km)'],
             "Inclination (deg)": best_row['Inclination (deg)'],
             "Sunlight Fraction": best_row['Sunlight Fraction'],
-            "Eclipse Minutes": best_row['Eclipse Minutes']
+            "Eclipse Minutes": best_row['Eclipse Minutes'],
+            "Launch Regime": launch_regime,
+            "Satellite Class": satellite_class,
+            "Payload Mass (kg)": sat_params["payload_mass_kg"],
+            "Power (W)": sat_params["power_w"],
+            "Solar Area (m²)": sat_params["solar_area_m2"],
+            "Class Description": sat_params["desc"],
+            "Mining Fraction": mining_fraction,
+            "Comms Fraction": effective_comms_fraction,
+            "GEO/ISR Relay Enabled": "Yes" if geo_isr_relay else "No"
         },
         cost_summary=cost_dict,
         performance_summary=perf_dict,
