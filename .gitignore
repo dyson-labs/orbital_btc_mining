@@ -1,1 +1,5 @@
 .env"analysis/client.json" 
+.env
+bfg-1.15.0.jar
+client.json
+analysis/client.json
