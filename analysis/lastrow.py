@@ -47,14 +47,14 @@ SATELLITE_CLASSES = {
         "payload_mass_kg": 10_000,
         "power_w": 1_000_000,
         "solar_area_m2": 3_640,
-        "desc": "Starship MW-class",
+        "desc": "MW-class",
         "asic_count": 111_111,
     },
     "40mw": {
-        "payload_mass_kg": 100_000,
+        "payload_mass_kg": 99_999,
         "power_w": 40_000_000,
         "solar_area_m2": 145_454,
-        "desc": "Starship 40 MW-class",
+        "desc": "MMW-class",
         "asic_count": 4_444_444,
     },
 }
@@ -79,37 +79,70 @@ def set_last_processed_row(idx):
         f.write(str(idx))
 
 def process_row(row):
+    row = {k.strip(): v.strip() if isinstance(v, str) else v for k, v in row.items()}
     print("Processing row:", row)
+    print("\n--- Raw Google Sheet Keys ---")
+    for key in row.keys():
+        print(repr(key))
+
     user_name = f"{row.get('First Name', '')} {row.get('Last name', '')}".strip()
     user_email = row.get("Email")
     if not user_email:
         print("No email found in row, skipping.")
         return
 
-    # --- Parse user options ---
-    launch_regime = (row.get("Launch Cost Regime") or "current").strip().lower()
-    sat_class = (row.get("Satellite Class") or "cubesat").strip().lower()
-    params = SATELLITE_CLASSES.get(sat_class, SATELLITE_CLASSES["cubesat"])
-    geo_isr_relay = str(row.get("Use GEO Relay?", "No")).strip().lower() in ["yes", "true", "1"]
+    SATELLITE_CLASS_MAP = {
+        "CubeSat": "cubesat",
+        "ESPA-class": "espa",
+        "MegaWatt-class": "mw",
+        "40MegaWatt-class": "40mw"
+    }
+    LAUNCH_REGIME_MAP = {
+        "Current launch options": "current",
+        "Coming soon launch options": "early",
+        "Future launch options": "late",   # <-- Map "future" regime to "late"
+        }
 
-    # --- Build mission_params dictionary for PDF ---
+
+    sat_class_raw = (
+        row.get("What class of satellite would you like to review?")
+        or row.get("Satellite Class")
+        or "CubeSat"
+    )
+    sat_class = SATELLITE_CLASS_MAP.get(sat_class_raw, "cubesat")
+
+    launch_regime_raw = (
+        row.get("What launch regime would you like to review?")
+        or row.get("Launch Cost Regime")
+        or "Current launch options"
+    )
+    launch_regime = LAUNCH_REGIME_MAP.get(launch_regime_raw, "current")
+
+    geo_isr_raw = row.get("Use GEO/ISR (intersatellite relays) in study?", "No")
+    geo_isr_relay = geo_isr_raw.strip().lower() in ["yes", "y", "true"]
+
+    print(f"Parsed launch_regime: {launch_regime} (raw: {launch_regime_raw})")
+    print(f"Parsed sat_class: {sat_class} (raw: {sat_class_raw})")
+    print(f"Parsed geo_isr_relay: {geo_isr_relay} (raw: {geo_isr_raw})")
+
+    params = SATELLITE_CLASSES[sat_class]
+
     mission_params = {
         "First Name": row.get("First Name", ""),
         "Last Name": row.get("Last name", ""),
         "Email": user_email,
         "Phone": row.get("Phone number", ""),
         "Signed up for updates?": row.get("Sign up for news and updates?", ""),
-        "Interested Services": row.get("What services are you interested in?", ""),
+        "Interested Services": row.get("What services are you interested in? ", ""),
         "Budget": row.get("What is your budget?", ""),
-        "How did you hear about us?": row.get("How did you hear about us?", ""),
+        "How did you hear about us?": row.get("How did you hear about us? ", ""),
         "Message": row.get("Message", ""),
         "Timestamp": row.get("Timestamp", ""),
         "Launch Cost Regime": launch_regime,
-        "Satellite Class": sat_class.title(),
+        "Satellite Class": SATELLITE_CLASSES[sat_class]["desc"],
         "Satellite Mass (kg)": params["payload_mass_kg"],
         "Satellite Power (W)": params["power_w"],
         "Solar Array Area (m²)": params["solar_area_m2"],
-        "Class Description": params["desc"],
         "GEO/ISR Relay Used": "Yes" if geo_isr_relay else "No",
     }
 
@@ -171,19 +204,89 @@ def process_row(row):
     best_idx = valid["Weighted Score"].idxmax()
     best_row = valid.loc[best_idx]
 
-    # Cost model and performance summary
+    # --- Calculate effective comms and mining fraction as in main.py ---
+    rf_dict = full_rf_visibility_simulation(
+        tle=best_row["tle_lines"],
+        uplink_bps=10000,
+        downlink_bps=10000,
+        duration_days=30,
+        verbose=False,
+    )
+    rf_downlink = rf_dict.get("downlink_fraction", 0.25)
+    rf_uplink = rf_dict.get("uplink_fraction", 0.5)
+
+    if geo_isr_relay:
+        downlink_fraction = 1.0
+        uplink_fraction = 1.0
+        rf_dict["Note"] = "GEO/ISR relay enabled: comms/mining at 100% regardless of regime/orbit."
+    elif launch_regime == "late":
+        downlink_fraction = 1.0
+        uplink_fraction = 1.0
+        rf_dict["Note"] = "Late regime: comms/mining at 100%."
+    elif launch_regime == "early":
+        downlink_fraction = 0.5 * rf_downlink + 0.5
+        uplink_fraction = 0.5 * rf_uplink + 0.5
+        rf_dict["Note"] = "Early regime: comms/mining 50% orbit-based, 50% ideal."
+    else:  # current
+        downlink_fraction = rf_downlink
+        uplink_fraction = rf_uplink
+        rf_dict["Note"] = "Current regime: comms/mining from orbit/network only."
+
+    effective_comms_fraction = min(downlink_fraction, uplink_fraction)
     solar_fraction = float(best_row["Sunlight Fraction"])
-    capex_opex = {
-        "bus_cost": 60000,
-        "payload_cost": 60000,
-        "launch_cost": 130000,
-        "integration_cost": 45000,
-        "comms_cost": 100000,
-        "overhead": 160000,
-        "contingency": 0.25,
-        "btc_price": 105000,
+    mining_fraction = solar_fraction * effective_comms_fraction
+
+    # Update RF summary fields for PDF (optional)
+    rf_dict["Effective Comms Fraction (%)"] = f"{effective_comms_fraction*100:.1f}%"
+    rf_dict["Regime-Adjusted Mining Fraction (%)"] = f"{mining_fraction*100:.1f}%"
+    rf_dict["Launch Regime"] = launch_regime.title()
+    rf_dict["GEO/ISR Relay Enabled"] = "Yes" if geo_isr_relay else "No"
+
+    # Get cost values for correct satellite class
+    sat_cost_lookup = {
+        "cubesat": dict(
+            bus_cost=60_000,
+            payload_cost=60_000,
+            integration_cost=45_000,
+            comms_cost=100_000,
+            overhead=160_000,
+            contingency=0.25
+        ),
+        "espa": dict(
+            bus_cost=300_000,
+            payload_cost=150_000,
+            integration_cost=250_000,
+            comms_cost=500_000,
+            overhead=750_000,
+            contingency=0.20
+        ),
+        "mw": dict(
+            bus_cost=10_000_000,
+            payload_cost=1_700_000,
+            integration_cost=5_000_000,
+            comms_cost=8_000_000,
+            overhead=8_000_000,
+            contingency=0.15
+        ),
+        "40mw": dict(
+            bus_cost=15_000_000,
+            payload_cost=75_000_000,
+            integration_cost=10_000_000,
+            comms_cost=8_000_000,
+            overhead=15_000_000,
+            contingency=0.15
+        ),
     }
-    cost_data = run_cost_model(solar_fraction, **capex_opex)
+
+    capex_opex = {
+        **sat_cost_lookup.get(sat_class, sat_cost_lookup["cubesat"]),
+        "btc_price": 105000,
+        "launch_cost": float(best_row["Launch Cost ($)"]),
+        "asic_count": params["asic_count"],
+    }
+
+    # 🚨 HERE'S THE KEY LINE: Pass mining_fraction, not solar_fraction
+    cost_data = run_cost_model(mining_fraction, **capex_opex)
 
     cost_dict = {
         "Bus": f"${cost_data['bus_cost']:,.0f}",
@@ -204,7 +307,7 @@ def process_row(row):
     # Thermal Model
     T_hist, x, thermal_plot_buf, temp_stats = run_thermal_eclipse_model(
         orbit_period_s=5400,
-        eclipse_duration_s=1800,
+        eclipse_duration_s=0,
         t_total=5 * 5400,
         dt=1.0,
         plot3d=True,
@@ -216,13 +319,16 @@ def process_row(row):
         "Avg board temp (°C)": f"{temp_stats['Avg board temp (°C)']:.0f}",
     }
 
-    rf_dict = full_rf_visibility_simulation(
-        tle=best_row["tle_lines"],
-        uplink_bps=10000,
-        downlink_bps=10000,
-        duration_days=30,
-        verbose=False,
-    )
+    print("\n=== DEBUG DUMP BEFORE PDF ===")
+    print("User Name:", user_name)
+    print("User Email:", user_email)
+    print("Orbit Label:", best_row['Orbit Label'])
+    print("Mission Params:", mission_params)
+    print("Cost Summary:", cost_dict)
+    print("Performance Summary:", perf_dict)
+    print("Thermal Summary:", thermal_dict)
+    print("RF Summary:", rf_dict)
+    print("Thermal Plot Buf Exists:", thermal_plot_buf is not None)
 
     # --- Generate the PDF report ---
     output_pdf_path = os.path.join(BTC_STUDY_PATH, "user_reports")
@@ -259,6 +365,9 @@ def process_row(row):
         attachments=[pdf_filename],
     )
     print(f"Sent email to {user_email} with report {pdf_filename}")
+
+
+
 
 def main():
     creds = authenticate_gsheets()

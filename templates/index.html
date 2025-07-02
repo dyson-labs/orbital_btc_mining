@@ -1,0 +1,83 @@
+<!doctype html>
+<html>
+<head>
+    <title>BTC Mining Satellite Configurator</title>
+    <style>
+        label { font-weight: bold; }
+        .slider-label { margin-bottom: 4px; display: block; }
+        .slider-value { display: inline-block; min-width: 40px; }
+    </style>
+</head>
+<body>
+    <h1>Configure Your Satellite Mission</h1>
+    <form id="configForm" onsubmit="return false;">
+        <label for="orbit">Select Orbit:</label>
+        <select id="orbit" name="orbit">
+            {% for value, label in orbits %}
+                <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+        </select>
+        <br><br>
+        <label for="launch">Select Launch Vehicle:</label>
+        <select id="launch" name="launch">
+            {% for value, label in launches %}
+                <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+        </select>
+        <br><br>
+        <label for="regime">Select Launch Regime:</label>
+        <select id="regime" name="regime">
+            {% for value, label in regimes %}
+                <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+        </select>
+        <br><br>
+        <label for="sat_class">Select Satellite Class:</label>
+        <select id="sat_class" name="sat_class">
+            {% for value, label in sat_classes %}
+                <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+        </select>
+        <br><br>
+        <span class="slider-label">Bitcoin Price Appreciation (%/yr): <span id="btc_appreciation_val">15</span>%</span>
+        <input type="range" id="btc_appreciation" name="btc_appreciation" min="0" max="45" value="15" step="1" oninput="document.getElementById('btc_appreciation_val').innerText=this.value;">
+        <br><br>
+        <span class="slider-label">Bitcoin Network Hash Growth (%/yr): <span id="btc_hash_growth_val">25</span>%</span>
+        <input type="range" id="btc_hash_growth" name="btc_hash_growth" min="0" max="45" value="25" step="1" oninput="document.getElementById('btc_hash_growth_val').innerText=this.value;">
+        <br><br>
+        <button type="button" onclick="simulate()">Simulate</button>
+        <div id="loading" style="display:none; color: #0a0; font-weight: bold; margin: 20px 0;">
+            Simulating... Please wait.
+        </div>
+    </form>
+    <div id="results" style="margin-top: 2em; color: green;"></div>
+    <script>
+        function simulate() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').innerText = '';
+            const data = {
+                orbit: document.getElementById('orbit').value,
+                launch: document.getElementById('launch').value,
+                regime: document.getElementById('regime').value,
+                sat_class: document.getElementById('sat_class').value,
+                btc_appreciation: document.getElementById('btc_appreciation').value,
+                btc_hash_growth: document.getElementById('btc_hash_growth').value
+            };
+            fetch('/api/simulate', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            })
+            .then(res => res.json())
+            .then(res => {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('results').innerText = JSON.stringify(res, null, 2);
+            })
+            .catch(e => {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('results').innerText = "Error: " + e;
+            });
+        }
+    </script>
+</body>
+</html>

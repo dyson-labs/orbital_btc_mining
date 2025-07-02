@@ -7,7 +7,6 @@ if dev_path not in sys.path:
     sys.path.insert(0, dev_path)
 print("AFTER INSERT sys.path (first 3):", sys.path[:3])
 
-
 # --------- User-supplied fields (for testing/demo) ---------
 form_name = "Jane Doe"
 form_email = "jane@user.com"
@@ -94,10 +93,7 @@ import os
 from orbits.eclipse import OrbitEnvironment
 from radiation.tid_model import RadiationModel
 from power.power_model import PowerModel
-
-print("LaunchModel loaded from:", LaunchModel.__module__)
-import launch.launch_model
-print("launch_model path:", launch.launch_model.__file__)
+from launch.launch_model import LaunchModel
 
 from analysis.plot_summary_table import plot_summary_table_to_buffer
 from astropy import units as u
@@ -137,7 +133,6 @@ def orbit_label(orbit: dict, alt, inc):
     if alt is not None and inc is not None:
         return f"{int(round(alt))} km / {inc:.1f}°"
     return "Unknown"
-
 
 def load_orbit_configs(path: str = None) -> list:
     if path is None:
@@ -183,6 +178,7 @@ def run_simulation(return_df=True, verbose=False,
             launch_options = launch_model.find_options(
                 altitude_km=alt,
                 payload_mass_kg=payload_mass_kg,
+                when_available=launch_regime,
             )
             if launch_options:
                 cheapest = min(launch_options, key=lambda x: x["total_cost_usd"])
@@ -199,21 +195,21 @@ def run_simulation(return_df=True, verbose=False,
             launch_cost_num = np.nan
 
         result = {
-            "Orbit Label"         : label,
-            "Orbit Name"          : name,
-            "Altitude (km)"       : alt,
-            "Inclination (deg)"   : inc,
-            "Sunlight Fraction"   : round(sunlight, 3) if sunlight is not None else None,
-            "Eclipse Minutes"     : round(eclipse_minutes, 1) if eclipse_minutes is not None else None,
-            "Avg Power (W/m²)"    : round(avg_power_w_m2, 1) if avg_power_w_m2 is not None else None,
-            "TID (krad over 5yr)" : rad["estimated_tid_krad"],
-            "SEU Risk"            : rad["seu_rating"],
-            "Launch Cost"         : launch_cost_str,
-            "Launch Cost ($)"     : launch_cost_num,
-            "tle_lines"           : orbit.get("tle_lines", None),
-            "Payload Mass (kg)"   : payload_mass_kg,
-            "Power (W)"           : power_w,
-            "Solar Area (m²)"     : solar_area_m2,
+            "Orbit Label": label,
+            "Orbit Name": name,
+            "Altitude (km)": alt,
+            "Inclination (deg)": inc,
+            "Sunlight Fraction": round(sunlight, 3) if sunlight is not None else None,
+            "Eclipse Minutes": round(eclipse_minutes, 1) if eclipse_minutes is not None else None,
+            "Avg Power (W/m²)": round(avg_power_w_m2, 1) if avg_power_w_m2 is not None else None,
+            "TID (krad over 5yr)": rad["estimated_tid_krad"],
+            "SEU Risk": rad["seu_rating"],
+            "Launch Cost": launch_cost_str,
+            "Launch Cost ($)": launch_cost_num,
+            "tle_lines": orbit.get("tle_lines", None),
+            "Payload Mass (kg)": payload_mass_kg,
+            "Power (W)": power_w,
+            "Solar Area (m²)": solar_area_m2,
         }
         all_results.append(result)
         if verbose:
@@ -225,14 +221,9 @@ def run_simulation(return_df=True, verbose=False,
         return df
 
 if __name__ == "__main__":
-    # geo_isr_relay should be set by user input, not hardcoded
-    # geo_isr_relay = user_input["geo_isr_relay"] or however you get it
-
     sat_params = sat_class_lookup.get(satellite_class, sat_class_lookup["cubesat"])
     sat_costs = sat_cost_lookup.get(satellite_class, sat_cost_lookup["cubesat"])
 
-    # --- HERE IS THE KEY --- #
-    # geo_isr_relay is passed directly from user input
     df = run_simulation(
         return_df=True, verbose=VERBOSE,
         launch_regime=launch_regime,
@@ -256,10 +247,12 @@ if __name__ == "__main__":
     valid["Weighted Score"] = score
     best_idx = valid["Weighted Score"].idxmax()
     best_row = valid.loc[best_idx]
+
     # Run cost model
     solar_fraction = float(best_row["Sunlight Fraction"])
     capex_opex = {"bus_cost": 60000, "payload_cost": 60000, "launch_cost": 130000, "integration_cost": 45000, "comms_cost": 100000, "overhead": 160000, "contingency": 0.25, "btc_price": 105000}
     cost_data = run_cost_model(solar_fraction, **capex_opex)
+
     # RF Model & Mining Efficiency Regime Logic
     rf_dict = full_rf_visibility_simulation(
         tle=best_row["tle_lines"],
@@ -298,7 +291,6 @@ if __name__ == "__main__":
     rf_dict["Launch Regime"] = launch_regime.title()
     rf_dict["GEO/ISR Relay Enabled"] = "Yes" if geo_isr_relay else "No"
 
-    # Print for debug
     print(f"geo_isr_relay: {geo_isr_relay}")
     print(f"sunlight_fraction: {solar_fraction}")
     print(f"effective_comms_fraction: {effective_comms_fraction}")

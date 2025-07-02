@@ -56,6 +56,7 @@ def generate_one_pager(
     # Orbit summary
     c.setFont("Helvetica-Bold", 12)
     c.drawString(margin, line_y - 1.1 * inch, f"Orbit: {orbit_label}")
+    c.setFont("Helvetica", 9)
 
     # ----
     # Section text area settings
@@ -163,12 +164,12 @@ def generate_one_pager(
 
     c.setFont("Helvetica-Oblique", 8)
     c.setFillColorRGB(0.5, 0.5, 0.5)
-    disclaimer_width = width - 2 * margin
+    disclaimer_width = width - 1 * margin
 
     wrapped_lines = textwrap.wrap(disclaimer, width=110)
     line_height = 10
     total_text_height = len(wrapped_lines) * line_height
-    y_position = margin + total_text_height
+    y_position = total_text_height #+ margin 
 
     for line in wrapped_lines:
         c.drawString(margin, y_position, line)

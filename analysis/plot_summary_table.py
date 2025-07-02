@@ -69,23 +69,21 @@ def plot_summary_table_to_buffer(
         return s if len(s) <= max_label_len else s[:max_label_len - 1] + "…"
     labels = [short_label(l) for l in df["Orbit Label"]]
 
-
     # --- Draw bars for each metric, with dummy left bar for margin ---
     for i, m in enumerate(metrics):
         vals = df[m].astype(float)
         best = vals.max() if maximize[m] else vals.min()
-        # --- Add dummy value for left margin ---
+        # Add dummy value for left margin
         bar_vals = np.insert(vals.values, 0, 0)
-            '#FFD700' if idx == best_idx else
-            ('#90ee90' if abs(v - best) < 1e-6 and idx != best_idx else '#26415B')
+        bar_colors = ['white'] + [
+            (
+                '#FFD700' if idx == best_idx else
+                ('#90ee90' if abs(v - best) < 1e-6 and idx != best_idx else '#26415B')
+            )
             for idx, v in enumerate(vals)
         ]
-#<<<<<<< HEAD
-#        axes[i].bar(range(len(df)), vals, color=bar_colors, width=0.7)
-#=======
         axes[i].bar(range(len(bar_vals)), bar_vals, color=bar_colors, width=0.7)
-        axes[i].set_xlim(-0.5, len(bar_vals)-0.5)  # Show all bars including dummy
-#>>>>>>> 6c39a73 (Initial production push)
+        axes[i].set_xlim(-0.5, len(bar_vals)-0.5)
         axes[i].set_title(m, loc='left', fontsize=13 * font_scale, fontweight='bold')
         axes[i].set_xticks([])
         axes[i].set_yticks([])
@@ -104,11 +102,7 @@ def plot_summary_table_to_buffer(
     ax.set_yticks([])
 
     # --- Short orbit labels under bars ---
-#<<<<<<< HEAD
- #   ax.set_xticks(range(len(df)))
-#=======
     ax.set_xticks(range(1, len(bar_vals)))  # skip dummy
-#>>>>>>> 6c39a73 (Initial production push)
     ax.set_xticklabels(labels, fontsize=11 * font_scale, rotation=32, ha='right')
 
     # --- Annotation: Arrow + text above best bar ---
