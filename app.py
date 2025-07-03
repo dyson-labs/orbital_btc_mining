@@ -15,7 +15,6 @@ from analysis.orbit_plot import plot_orbit_to_buffer
 from analysis.roi_plot import project_revenue_curve, roi_plot_to_buffer
 
 # === MAIN/UTILS (core orchestrator) ===
-from main import run_simulation
 
 # === ORBITS FOLDER ===
 from orbits.eclipse import OrbitEnvironment
