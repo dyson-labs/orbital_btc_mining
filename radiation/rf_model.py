@@ -2,6 +2,11 @@ import numpy as np
 from scipy.special import erfc
 from skyfield.api import Topos, EarthSatellite, load
 import datetime
+import io
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 VERBOSE = True  # Set to False for silent operation except summary
 
@@ -1069,6 +1074,112 @@ def full_rf_visibility_simulation(
         )
 
     return rf_dict
+
+
+def rf_margin_timeseries(
+    tle,
+    networks=None,
+    dt=60,
+    downlink_bps=10000,
+    verbose=False,
+):
+    """Return times (s) and best downlink margin (dB) over one orbit."""
+    ts = load.timescale()
+    sat = EarthSatellite(tle[0], tle[1], "user_sat", ts)
+    period_min = 2 * np.pi / sat.model.no_kozai
+    period_s = period_min * 60
+
+    if networks:
+        if isinstance(networks, str):
+            networks = [networks]
+        gs_list = [g for g in ground_segment if g["network"] in networks]
+    else:
+        gs_list = ground_segment
+
+    T_sys_gs = 290
+    BER_thresh_dn = 1e-5
+
+    start = datetime.datetime.utcnow()
+    n_steps = int(period_s // dt) + 1
+    times = []
+    margins = []
+
+    for i in range(n_steps):
+        t = start + datetime.timedelta(seconds=i * dt)
+        ts_t = ts.utc(
+            t.year,
+            t.month,
+            t.day,
+            t.hour,
+            t.minute,
+            t.second + t.microsecond / 1e6,
+        )
+        best_margin = None
+        for gs in gs_list:
+            diff = sat - gs["location"]
+            topoc = diff.at(ts_t)
+            alt = topoc.altaz()[0].degrees
+            if alt < 10:
+                continue
+            dist_m = topoc.distance().m
+            dn_bands = [
+                ("sdown_fr", gs.get("sdown_fr"), gs.get("sdown_gt")),
+                ("xdown_fr", gs.get("xdown_fr"), gs.get("xdown_gt")),
+                ("kadown_fr", gs.get("kadown_fr"), gs.get("kadown_gt")),
+            ]
+            for _band, frange, gt in dn_bands:
+                if not frange:
+                    continue
+                midf = (frange[0] + frange[1]) / 2
+                ant_list = select_antennas_for_freq(midf)
+                if not ant_list:
+                    continue
+                ant = max(ant_list, key=lambda a: a["gain"])
+                tx_modems = select_modems_for_freq_and_type(midf, "transmitter")
+                tx_pwr = 2
+                for m in tx_modems:
+                    if isinstance(m.get("transmit_power_W"), (list, tuple)):
+                        tx_pwr = max(m["transmit_power_W"])
+                    elif isinstance(m.get("transmit_power_W"), (int, float)):
+                        tx_pwr = m["transmit_power_W"]
+                    for mod in m.get("modulations", []):
+                        lb = calc_link_budget(
+                            dist_m,
+                            midf,
+                            tx_pwr,
+                            ant["gain"],
+                            gt,
+                            downlink_bps,
+                            mod,
+                            T_sys_gs,
+                            BER_thresh_dn,
+                        )
+                        margin = lb["link_margin_dB"]
+                        if best_margin is None or margin > best_margin:
+                            best_margin = margin
+
+        times.append(i * dt)
+        margins.append(best_margin if best_margin is not None else float("nan"))
+
+    return times, margins
+
+
+def rf_margin_plot_to_buffer(tle, networks=None, dt=60, verbose=False):
+    times, margins = rf_margin_timeseries(
+        tle, networks=networks, dt=dt, verbose=verbose
+    )
+    hours = np.array(times) / 3600.0
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.plot(hours, margins)
+    ax.set_xlabel("Time (hr)")
+    ax.set_ylabel("Downlink Margin (dB)")
+    ax.set_title("RF Margin Over One Orbit")
+    plt.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png")
+    plt.close(fig)
+    buf.seek(0)
+    return buf
 
 
 # This allows calling directly

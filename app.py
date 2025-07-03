@@ -31,6 +31,7 @@ from radiation.Thermal import run_thermal_eclipse_model
 from radiation.rf_model import (
     full_rf_visibility_simulation,
     ground_stations_by_network,
+    rf_margin_plot_to_buffer,
 )
 
 # === COSTMODEL FOLDER ===
@@ -154,6 +155,11 @@ def orbit_visuals(idx: int):
             verbose=False,
         )
         orbit_buf = plot_orbit_to_buffer(env)
+        rf_buf = None
+        if orbit_cfg.get("tle_lines"):
+            rf_buf = rf_margin_plot_to_buffer(
+                orbit_cfg.get("tle_lines"), networks=None, dt=60, verbose=False
+            )
 
         data = {
             "orbit_plot": base64.b64encode(orbit_buf.getvalue()).decode("utf-8"),
@@ -161,6 +167,9 @@ def orbit_visuals(idx: int):
                 base64.b64encode(thermal_buf.getvalue()).decode("utf-8")
                 if thermal_buf
                 else None
+            ),
+            "rf_plot": (
+                base64.b64encode(rf_buf.getvalue()).decode("utf-8") if rf_buf else None
             ),
         }
         return jsonify(data)
@@ -205,6 +214,7 @@ def api_simulate():
                 "Downlink % of mission": "100",
                 "Uplink % of mission": "100",
             }
+            rf_buf = None
         else:
             if orbit_cfg.get("tle_lines"):
                 networks = None if gs_network == "all" else gs_network
@@ -214,8 +224,15 @@ def api_simulate():
                     verbose=False,
                     networks=networks,
                 )
+                rf_buf = rf_margin_plot_to_buffer(
+                    orbit_cfg.get("tle_lines"),
+                    networks=networks,
+                    dt=60,
+                    verbose=False,
+                )
             else:
                 rf = {}
+                rf_buf = None
 
         orbit_buf = plot_orbit_to_buffer(env)
 
@@ -307,6 +324,9 @@ def api_simulate():
                 base64.b64encode(thermal_buf.getvalue()).decode("utf-8")
                 if thermal_buf
                 else None
+            ),
+            "rf_plot": (
+                base64.b64encode(rf_buf.getvalue()).decode("utf-8") if rf_buf else None
             ),
             "roi_plot": base64.b64encode(roi_buf.getvalue()).decode("utf-8"),
         }

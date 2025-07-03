@@ -63,6 +63,7 @@
     <div id="visuals" style="margin-top: 1em;">
         <img id="orbit_img" alt="Orbit plot" style="max-width: 400px; display:none;" />
         <img id="thermal_img" alt="Thermal plot" style="max-width: 400px; display:none;" />
+        <img id="rf_plot_img" alt="RF Margin" style="max-width: 400px; display:none;" />
         <img id="roi_img" alt="ROI plot" style="max-width: 400px; display:none;" />
     </div>
     <pre id="rf_summary" style="background:#f5f5f5; padding:10px;"></pre>
@@ -88,10 +89,16 @@
                             'data:image/png;base64,' + data.thermal_plot;
                         document.getElementById('thermal_img').style.display = 'block';
                     }
+                    if (data.rf_plot) {
+                        document.getElementById('rf_plot_img').src =
+                            'data:image/png;base64,' + data.rf_plot;
+                        document.getElementById('rf_plot_img').style.display = 'block';
+                    }
                 })
                 .catch(e => {
                     document.getElementById('orbit_img').style.display = 'none';
                     document.getElementById('thermal_img').style.display = 'none';
+                    document.getElementById('rf_plot_img').style.display = 'none';
                     console.error(e);
                 });
         }
@@ -101,6 +108,7 @@
             document.getElementById('results').innerText = '';
             document.getElementById('orbit_img').style.display = 'none';
             document.getElementById('thermal_img').style.display = 'none';
+            document.getElementById('rf_plot_img').style.display = 'none';
             document.getElementById('roi_img').style.display = 'none';
             document.getElementById('rf_summary').innerText = '';
             document.getElementById('cost_breakdown').innerText = '';
@@ -138,6 +146,10 @@
                 if (res.thermal_plot) {
                     document.getElementById('thermal_img').src = 'data:image/png;base64,' + res.thermal_plot;
                     document.getElementById('thermal_img').style.display = 'block';
+                }
+                if (res.rf_plot) {
+                    document.getElementById('rf_plot_img').src = 'data:image/png;base64,' + res.rf_plot;
+                    document.getElementById('rf_plot_img').style.display = 'block';
                 }
                 if (res.roi_plot) {
                     document.getElementById('roi_img').src = 'data:image/png;base64,' + res.roi_plot;
