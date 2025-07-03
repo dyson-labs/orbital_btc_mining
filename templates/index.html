@@ -54,6 +54,7 @@
     <div id="visuals" style="margin-top: 1em;">
         <img id="orbit_img" alt="Orbit plot" style="max-width: 400px; display:none;" />
         <img id="thermal_img" alt="Thermal plot" style="max-width: 400px; display:none;" />
+        <img id="roi_img" alt="ROI plot" style="max-width: 400px; display:none;" />
     </div>
     <pre id="rf_summary" style="background:#f5f5f5; padding:10px;"></pre>
     <script>
@@ -88,6 +89,7 @@
             document.getElementById('results').innerText = '';
             document.getElementById('orbit_img').style.display = 'none';
             document.getElementById('thermal_img').style.display = 'none';
+            document.getElementById('roi_img').style.display = 'none';
             document.getElementById('rf_summary').innerText = '';
             const data = {
                 orbit: document.getElementById('orbit').value,
@@ -108,7 +110,10 @@
             })
             .then(res => {
                 document.getElementById('loading').style.display = 'none';
-                document.getElementById('results').innerText = 'Orbit: ' + res.orbit;
+                document.getElementById('results').innerText =
+                    'Orbit: ' + res.orbit +
+                    ' | Power: ' + res.power_w.toFixed(1) + ' W' +
+                    ' | Mission Cost: $' + res.cost_summary.total_cost.toLocaleString();
                 if (res.orbit_plot) {
                     document.getElementById('orbit_img').src = 'data:image/png;base64,' + res.orbit_plot;
                     document.getElementById('orbit_img').style.display = 'block';
@@ -116,6 +121,10 @@
                 if (res.thermal_plot) {
                     document.getElementById('thermal_img').src = 'data:image/png;base64,' + res.thermal_plot;
                     document.getElementById('thermal_img').style.display = 'block';
+                }
+                if (res.roi_plot) {
+                    document.getElementById('roi_img').src = 'data:image/png;base64,' + res.roi_plot;
+                    document.getElementById('roi_img').style.display = 'block';
                 }
                 document.getElementById('rf_summary').innerText = JSON.stringify(res.rf_summary, null, 2);
             })

@@ -9,6 +9,7 @@ import os
 import pandas as pd
 from astropy import units as u
 from analysis.orbit_plot import plot_orbit_to_buffer
+from analysis.roi_plot import project_revenue_curve, roi_plot_to_buffer
 
 # === MAIN/UTILS (core orchestrator) ===
 from main import run_simulation
@@ -55,6 +56,56 @@ SAT_CLASS_OPTIONS = [
 ]
 BITCOIN_PRICE_APPRECIATION_OPTIONS = [(str(i), f"{i}%") for i in range(-50, 51, 5)]
 BITCOIN_HASH_GROWTH_OPTIONS = [(str(i), f"{i}%") for i in range(-50, 51, 5)]
+
+# Parameters for satellite classes
+SAT_CLASS_LOOKUP = {
+    "cubesat": dict(payload_mass_kg=1, power_w=40, solar_area_m2=0.015, asic_count=3),
+    "espa": dict(payload_mass_kg=150, power_w=2200, solar_area_m2=8, asic_count=240),
+    "mw": dict(
+        payload_mass_kg=10000, power_w=1_000_000, solar_area_m2=3640, asic_count=111_111
+    ),
+    "40mw": dict(
+        payload_mass_kg=100000,
+        power_w=40_000_000,
+        solar_area_m2=145_454,
+        asic_count=4_444_444,
+    ),
+}
+
+SAT_COST_LOOKUP = {
+    "cubesat": dict(
+        bus_cost=60_000,
+        payload_cost=60_000,
+        integration_cost=45_000,
+        comms_cost=100_000,
+        overhead=160_000,
+        contingency=0.25,
+    ),
+    "espa": dict(
+        bus_cost=300_000,
+        payload_cost=150_000,
+        integration_cost=250_000,
+        comms_cost=500_000,
+        overhead=750_000,
+        contingency=0.20,
+    ),
+    "mw": dict(
+        bus_cost=10_000_000,
+        payload_cost=1_700_000,
+        integration_cost=5_000_000,
+        comms_cost=8_000_000,
+        overhead=8_000_000,
+        contingency=0.15,
+    ),
+    "40mw": dict(
+        bus_cost=15_000_000,
+        payload_cost=75_000_000,
+        integration_cost=10_000_000,
+        comms_cost=8_000_000,
+        overhead=15_000_000,
+        contingency=0.15,
+    ),
+}
 
 
 @app.route("/")
@@ -148,16 +199,65 @@ def api_simulate():
 
         orbit_buf = plot_orbit_to_buffer(env)
 
+        # --- Power and Cost Models ---
+        sat_class = data.get("sat_class", "cubesat")
+        params = SAT_CLASS_LOOKUP.get(sat_class, SAT_CLASS_LOOKUP["cubesat"])
+        costs = SAT_COST_LOOKUP.get(sat_class, SAT_COST_LOOKUP["cubesat"])
+
+        launch_model = LaunchModel()
+        altitude = env.altitude_km or orbit_cfg.get("altitude_km", 500)
+        launch_opts = launch_model.find_options(
+            altitude,
+            params["payload_mass_kg"],
+            when_available=data.get("regime", "current"),
+        )
+        launch_cost = (
+            min(o["total_cost_usd"] for o in launch_opts) if launch_opts else 0
+        )
+
+        btc_app = float(data.get("btc_appreciation", 0)) / 100.0
+        btc_hash = float(data.get("btc_hash_growth", 0)) / 100.0
+
+        capex = {
+            **costs,
+            "launch_cost": launch_cost,
+            "asic_count": params["asic_count"],
+            "btc_price_growth": btc_app,
+            "network_hashrate_growth": btc_hash,
+        }
+        cost_data = run_cost_model(env.sunlight_fraction, **capex)
+
+        revenue_curve = project_revenue_curve(
+            env.sunlight_fraction,
+            cost_data["mission_lifetime"],
+            params["asic_count"],
+            hashrate_per_asic=capex.get("hashrate_per_asic", 0.63),
+            btc_price=capex.get("btc_price", 105000.0),
+            btc_price_growth=btc_app,
+            network_hashrate_ehs=capex.get("network_hashrate_ehs", 700.0),
+            network_hashrate_growth=btc_hash,
+            block_reward_btc=capex.get("block_reward_btc", 3.125),
+        )
+        roi_buf = roi_plot_to_buffer(cost_data["total_cost"], revenue_curve)
+
+        power_model = PowerModel()
+        available_power = (
+            power_model.estimate_power(env.sunlight_fraction) * params["solar_area_m2"]
+        )
+
         result = {
             "orbit": orbit_cfg.get("name"),
             "thermal_stats": temp_stats,
             "rf_summary": rf,
+            "power_w": available_power,
+            "cost_summary": cost_data,
             "orbit_plot": base64.b64encode(orbit_buf.getvalue()).decode("utf-8"),
             "thermal_plot": (
                 base64.b64encode(thermal_buf.getvalue()).decode("utf-8")
                 if thermal_buf
                 else None
             ),
+            "roi_plot": base64.b64encode(roi_buf.getvalue()).decode("utf-8"),
         }
         return jsonify(result)
     except Exception as e:
