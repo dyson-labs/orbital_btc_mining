@@ -58,6 +58,7 @@
     <pre id="rf_summary" style="background:#f5f5f5; padding:10px;"></pre>
     <pre id="cost_breakdown" style="background:#f5f5f5; padding:10px;"></pre>
     <pre id="spec_summary" style="background:#f5f5f5; padding:10px;"></pre>
+    <pre id="rad_summary" style="background:#f5f5f5; padding:10px;"></pre>
     <script>
         function updateOrbit() {
             const idx = document.getElementById('orbit').value;
@@ -94,6 +95,7 @@
             document.getElementById('rf_summary').innerText = '';
             document.getElementById('cost_breakdown').innerText = '';
             document.getElementById('spec_summary').innerText = '';
+            document.getElementById('rad_summary').innerText = '';
             const data = {
                 orbit: document.getElementById('orbit').value,
                 launch: document.getElementById('launch').value,
@@ -132,6 +134,7 @@
                 document.getElementById('rf_summary').innerText = JSON.stringify(res.rf_summary, null, 2);
                 document.getElementById('cost_breakdown').innerText = JSON.stringify(res.cost_summary, null, 2);
                 document.getElementById('spec_summary').innerText = JSON.stringify(res.specs, null, 2);
+                document.getElementById('rad_summary').innerText = JSON.stringify(res.radiation, null, 2);
             })
             .catch(e => {
                 document.getElementById('loading').style.display = 'none';

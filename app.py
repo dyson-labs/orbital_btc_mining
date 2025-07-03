@@ -258,6 +258,13 @@ def api_simulate():
         )
         roi_buf = roi_plot_to_buffer(cost_data["total_cost"], revenue_curve)
 
+        rad_model = RadiationModel()
+        rad_info = rad_model.estimate_tid(
+            env.altitude_km or orbit_cfg.get("altitude_km", 500),
+            env.inclination_deg or orbit_cfg.get("inclination_deg", 0),
+            years=cost_data["mission_lifetime"],
+        )
+
         power_model = PowerModel()
         available_power = (
             power_model.estimate_power(env.sunlight_fraction) * params["solar_area_m2"]
@@ -278,6 +285,7 @@ def api_simulate():
             "orbit": orbit_cfg.get("name"),
             "thermal_stats": temp_stats,
             "rf_summary": rf,
+            "radiation": rad_info,
             "power_w": available_power,
             "cost_summary": cost_data,
             "specs": specs,
