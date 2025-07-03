@@ -1,6 +1,9 @@
 # app.py
 
 from flask import Flask, render_template, request, jsonify, send_file
+import matplotlib
+
+matplotlib.use("Agg")
 
 # === ANALYSIS FOLDER ===
 import base64
@@ -47,7 +50,6 @@ ORBIT_OPTIONS = [
 launch_db = pd.read_csv(os.path.join(ROOT, "launch", "launcher_db.csv"))
 vehicles = sorted(launch_db["vehicle"].unique())
 LAUNCH_OPTIONS = [(v, v) for v in vehicles]
-LAUNCH_REGIME_OPTIONS = [("current", "Current"), ("early", "Early"), ("late", "Late")]
 SAT_CLASS_OPTIONS = [
     ("cubesat", "CubeSat"),
     ("espa", "ESPA-Class"),
@@ -114,7 +116,6 @@ def index():
         "index.html",
         orbits=ORBIT_OPTIONS,
         launches=LAUNCH_OPTIONS,
-        regimes=LAUNCH_REGIME_OPTIONS,
         sat_classes=SAT_CLASS_OPTIONS,
         btc_appreciations=BITCOIN_PRICE_APPRECIATION_OPTIONS,
         btc_hash_grows=BITCOIN_HASH_GROWTH_OPTIONS,
@@ -206,14 +207,23 @@ def api_simulate():
 
         launch_model = LaunchModel()
         altitude = env.altitude_km or orbit_cfg.get("altitude_km", 500)
+        selected_vehicle = data.get("launch")
+        when_available = "current"
+        row = launch_db[launch_db["vehicle"] == selected_vehicle]
+        if not row.empty:
+            when_available = row.iloc[0]["when_available"].strip().lower()
         launch_opts = launch_model.find_options(
             altitude,
             params["payload_mass_kg"],
-            when_available=data.get("regime", "current"),
+            when_available=when_available,
         )
-        launch_cost = (
-            min(o["total_cost_usd"] for o in launch_opts) if launch_opts else 0
-        )
+        launch_cost = 0
+        for o in launch_opts:
+            if o["vehicle"] == selected_vehicle:
+                launch_cost = o["total_cost_usd"]
+                break
+        if launch_cost == 0 and launch_opts:
+            launch_cost = min(o["total_cost_usd"] for o in launch_opts)
 
         btc_app = float(data.get("btc_appreciation", 0)) / 100.0
         btc_hash = float(data.get("btc_hash_growth", 0)) / 100.0

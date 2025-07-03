@@ -25,13 +25,6 @@
             {% endfor %}
         </select>
         <br><br>
-        <label for="regime">Select Launch Regime:</label>
-        <select id="regime" name="regime">
-            {% for value, label in regimes %}
-                <option value="{{ value }}">{{ label }}</option>
-            {% endfor %}
-        </select>
-        <br><br>
         <label for="sat_class">Select Satellite Class:</label>
         <select id="sat_class" name="sat_class">
             {% for value, label in sat_classes %}
@@ -94,7 +87,6 @@
             const data = {
                 orbit: document.getElementById('orbit').value,
                 launch: document.getElementById('launch').value,
-                regime: document.getElementById('regime').value,
                 sat_class: document.getElementById('sat_class').value,
                 btc_appreciation: document.getElementById('btc_appreciation').value,
                 btc_hash_growth: document.getElementById('btc_hash_growth').value
