@@ -768,6 +768,11 @@ ground_segment = [
     },
 ]
 
+# Map networks to their ground stations for easy filtering
+ground_stations_by_network = {}
+for gs in ground_segment:
+    ground_stations_by_network.setdefault(gs["network"], []).append(gs)
+
 # ... [Your big antennas, modems_sdrs, ground_segment dictionaries go here, unchanged] ...
 # If you omitted them for brevity, add them back above this function.
 
@@ -864,8 +869,9 @@ def full_rf_visibility_simulation(
     uplink_bps=5000,
     downlink_bps=10000,
     duration_days=30,
-    verbose=True,  # NEW preferred arg
-    print_results=None,  # legacy support
+    verbose=True,
+    print_results=None,
+    networks=None,
 ):
     if print_results is not None:
         verbose = print_results
@@ -896,7 +902,14 @@ def full_rf_visibility_simulation(
     BER_thresh_up = 1e-7
     mission_s = duration_days * 24 * 3600
 
-    for gs in ground_segment:
+    if networks:
+        if isinstance(networks, str):
+            networks = [networks]
+        gs_list = [g for g in ground_segment if g["network"] in networks]
+    else:
+        gs_list = ground_segment
+
+    for gs in gs_list:
         gloc = gs["location"]
         t_events, events = sat.find_events(gloc, t0, t1, altitude_degrees=10.0)
         passes = []

@@ -29,7 +29,10 @@ from launch.launch_model import LaunchModel
 # === RADIATION FOLDER ===
 from radiation.tid_model import RadiationModel
 from radiation.Thermal import run_thermal_eclipse_model
-from radiation.rf_model import full_rf_visibility_simulation
+from radiation.rf_model import (
+    full_rf_visibility_simulation,
+    ground_stations_by_network,
+)
 
 # === COSTMODEL FOLDER ===
 from costmodel.cost import run_cost_model
@@ -58,6 +61,9 @@ SAT_CLASS_OPTIONS = [
 ]
 BITCOIN_PRICE_APPRECIATION_OPTIONS = [(str(i), f"{i}%") for i in range(-50, 51, 5)]
 BITCOIN_HASH_GROWTH_OPTIONS = [(str(i), f"{i}%") for i in range(-50, 51, 5)]
+NETWORK_OPTIONS = [("all", "All Ground Stations")] + [
+    (n, n) for n in sorted(ground_stations_by_network.keys())
+]
 
 # Parameters for satellite classes
 SAT_CLASS_LOOKUP = {
@@ -119,6 +125,7 @@ def index():
         sat_classes=SAT_CLASS_OPTIONS,
         btc_appreciations=BITCOIN_PRICE_APPRECIATION_OPTIONS,
         btc_hash_grows=BITCOIN_HASH_GROWTH_OPTIONS,
+        networks=NETWORK_OPTIONS,
     )
 
 
@@ -192,6 +199,7 @@ def api_simulate():
         )
 
         comms_mode = data.get("comms_mode", "ground")
+        gs_network = data.get("gs_network", "all")
         if comms_mode == "relay":
             rf = {
                 "mode": "relay",
@@ -200,8 +208,12 @@ def api_simulate():
             }
         else:
             if orbit_cfg.get("tle_lines"):
+                networks = None if gs_network == "all" else gs_network
                 rf = full_rf_visibility_simulation(
-                    tle=orbit_cfg.get("tle_lines"), duration_days=1, verbose=False
+                    tle=orbit_cfg.get("tle_lines"),
+                    duration_days=1,
+                    verbose=False,
+                    networks=networks,
                 )
             else:
                 rf = {}
@@ -236,18 +248,20 @@ def api_simulate():
         btc_app = float(data.get("btc_appreciation", 0)) / 100.0
         btc_hash = float(data.get("btc_hash_growth", 0)) / 100.0
 
+        mission_life = float(data.get("mission_life", 5))
         capex = {
             **costs,
             "launch_cost": launch_cost,
             "asic_count": params["asic_count"],
             "btc_price_growth": btc_app,
             "network_hashrate_growth": btc_hash,
+            "mission_lifetime": mission_life,
         }
         cost_data = run_cost_model(env.sunlight_fraction, **capex)
 
         revenue_curve = project_revenue_curve(
             env.sunlight_fraction,
-            cost_data["mission_lifetime"],
+            mission_life,
             params["asic_count"],
             hashrate_per_asic=capex.get("hashrate_per_asic", 0.63),
             btc_price=capex.get("btc_price", 105000.0),
@@ -256,7 +270,7 @@ def api_simulate():
             network_hashrate_growth=btc_hash,
             block_reward_btc=capex.get("block_reward_btc", 3.125),
         )
-        roi_buf = roi_plot_to_buffer(cost_data["total_cost"], revenue_curve)
+        roi_buf = roi_plot_to_buffer(cost_data["total_cost"], revenue_curve, step=0.25)
 
         rad_model = RadiationModel()
         rad_info = rad_model.estimate_tid(

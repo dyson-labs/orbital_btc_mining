@@ -38,11 +38,21 @@
             <option value="relay">GEO/ISR Relay (100%)</option>
         </select>
         <br><br>
+        <label for="gs_network">Ground Station Network:</label>
+        <select id="gs_network" name="gs_network">
+            {% for value, label in networks %}
+                <option value="{{ value }}">{{ label }}</option>
+            {% endfor %}
+        </select>
+        <br><br>
         <span class="slider-label">Bitcoin Price Appreciation (%/yr): <span id="btc_appreciation_val">0</span>%</span>
         <input type="range" id="btc_appreciation" name="btc_appreciation" min="-50" max="50" value="0" step="5" oninput="document.getElementById('btc_appreciation_val').innerText=this.value;">
         <br><br>
         <span class="slider-label">Bitcoin Network Hash Growth (%/yr): <span id="btc_hash_growth_val">0</span>%</span>
         <input type="range" id="btc_hash_growth" name="btc_hash_growth" min="-50" max="50" value="0" step="5" oninput="document.getElementById('btc_hash_growth_val').innerText=this.value;">
+        <br><br>
+        <span class="slider-label">Mission Lifetime (years): <span id="mission_life_val">5</span></span>
+        <input type="range" id="mission_life" name="mission_life" min="0.25" max="10" value="5" step="0.25" oninput="document.getElementById('mission_life_val').innerText=this.value;">
         <br><br>
         <button type="button" onclick="simulate()">Simulate</button>
         <div id="loading" style="display:none; color: #0a0; font-weight: bold; margin: 20px 0;">
@@ -101,8 +111,10 @@
                 launch: document.getElementById('launch').value,
                 sat_class: document.getElementById('sat_class').value,
                 comms_mode: document.getElementById('comms_mode').value,
+                gs_network: document.getElementById('gs_network').value,
                 btc_appreciation: document.getElementById('btc_appreciation').value,
-                btc_hash_growth: document.getElementById('btc_hash_growth').value
+                btc_hash_growth: document.getElementById('btc_hash_growth').value,
+                mission_life: document.getElementById('mission_life').value
             };
             fetch('/api/simulate', {
                 method: 'POST',
