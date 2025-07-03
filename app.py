@@ -191,12 +191,20 @@ def api_simulate():
             verbose=False,
         )
 
-        if orbit_cfg.get("tle_lines"):
-            rf = full_rf_visibility_simulation(
-                tle=orbit_cfg.get("tle_lines"), duration_days=1, verbose=False
-            )
+        comms_mode = data.get("comms_mode", "ground")
+        if comms_mode == "relay":
+            rf = {
+                "mode": "relay",
+                "Downlink % of mission": "100",
+                "Uplink % of mission": "100",
+            }
         else:
-            rf = {}
+            if orbit_cfg.get("tle_lines"):
+                rf = full_rf_visibility_simulation(
+                    tle=orbit_cfg.get("tle_lines"), duration_days=1, verbose=False
+                )
+            else:
+                rf = {}
 
         orbit_buf = plot_orbit_to_buffer(env)
 
@@ -255,12 +263,24 @@ def api_simulate():
             power_model.estimate_power(env.sunlight_fraction) * params["solar_area_m2"]
         )
 
+        specs = {
+            "asic_count": params["asic_count"],
+            "solar_area_m2": params["solar_area_m2"],
+            "power_w": params["power_w"],
+            "solar_power_density_w_m2": (
+                params["power_w"] / params["solar_area_m2"]
+                if params["solar_area_m2"]
+                else None
+            ),
+        }
+
         result = {
             "orbit": orbit_cfg.get("name"),
             "thermal_stats": temp_stats,
             "rf_summary": rf,
             "power_w": available_power,
             "cost_summary": cost_data,
+            "specs": specs,
             "orbit_plot": base64.b64encode(orbit_buf.getvalue()).decode("utf-8"),
             "thermal_plot": (
                 base64.b64encode(thermal_buf.getvalue()).decode("utf-8")

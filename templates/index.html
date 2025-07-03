@@ -32,6 +32,12 @@
             {% endfor %}
         </select>
         <br><br>
+        <label for="comms_mode">Comms Uptime:</label>
+        <select id="comms_mode" name="comms_mode">
+            <option value="ground">Ground Stations</option>
+            <option value="relay">GEO/ISR Relay (100%)</option>
+        </select>
+        <br><br>
         <span class="slider-label">Bitcoin Price Appreciation (%/yr): <span id="btc_appreciation_val">0</span>%</span>
         <input type="range" id="btc_appreciation" name="btc_appreciation" min="-50" max="50" value="0" step="5" oninput="document.getElementById('btc_appreciation_val').innerText=this.value;">
         <br><br>
@@ -50,6 +56,8 @@
         <img id="roi_img" alt="ROI plot" style="max-width: 400px; display:none;" />
     </div>
     <pre id="rf_summary" style="background:#f5f5f5; padding:10px;"></pre>
+    <pre id="cost_breakdown" style="background:#f5f5f5; padding:10px;"></pre>
+    <pre id="spec_summary" style="background:#f5f5f5; padding:10px;"></pre>
     <script>
         function updateOrbit() {
             const idx = document.getElementById('orbit').value;
@@ -84,10 +92,13 @@
             document.getElementById('thermal_img').style.display = 'none';
             document.getElementById('roi_img').style.display = 'none';
             document.getElementById('rf_summary').innerText = '';
+            document.getElementById('cost_breakdown').innerText = '';
+            document.getElementById('spec_summary').innerText = '';
             const data = {
                 orbit: document.getElementById('orbit').value,
                 launch: document.getElementById('launch').value,
                 sat_class: document.getElementById('sat_class').value,
+                comms_mode: document.getElementById('comms_mode').value,
                 btc_appreciation: document.getElementById('btc_appreciation').value,
                 btc_hash_growth: document.getElementById('btc_hash_growth').value
             };
@@ -119,6 +130,8 @@
                     document.getElementById('roi_img').style.display = 'block';
                 }
                 document.getElementById('rf_summary').innerText = JSON.stringify(res.rf_summary, null, 2);
+                document.getElementById('cost_breakdown').innerText = JSON.stringify(res.cost_summary, null, 2);
+                document.getElementById('spec_summary').innerText = JSON.stringify(res.specs, null, 2);
             })
             .catch(e => {
                 document.getElementById('loading').style.display = 'none';
