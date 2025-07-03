@@ -60,7 +60,10 @@
         function updateOrbit() {
             const idx = document.getElementById('orbit').value;
             fetch(`/orbit_visuals/${idx}`)
-                .then(res => res.json())
+                .then(res => {
+                    if (!res.ok) throw new Error('Server error ' + res.status);
+                    return res.json();
+                })
                 .then(data => {
                     if (data.orbit_plot) {
                         document.getElementById('orbit_img').src =
@@ -72,6 +75,11 @@
                             'data:image/png;base64,' + data.thermal_plot;
                         document.getElementById('thermal_img').style.display = 'block';
                     }
+                })
+                .catch(e => {
+                    document.getElementById('orbit_img').style.display = 'none';
+                    document.getElementById('thermal_img').style.display = 'none';
+                    console.error(e);
                 });
         }
 
@@ -94,7 +102,10 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(data)
             })
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) throw new Error('Server error ' + res.status);
+                return res.json();
+            })
             .then(res => {
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('results').innerText = 'Orbit: ' + res.orbit;
@@ -110,7 +121,7 @@
             })
             .catch(e => {
                 document.getElementById('loading').style.display = 'none';
-                document.getElementById('results').innerText = "Error: " + e;
+                document.getElementById('results').innerText = 'Error: ' + e;
             });
         }
         window.onload = updateOrbit;

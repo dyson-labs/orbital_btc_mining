@@ -73,89 +73,95 @@ def index():
 @app.route("/orbit_visuals/<int:idx>")
 def orbit_visuals(idx: int):
     """Return orbit and thermal plots for the selected orbit."""
-    if idx < 0 or idx >= len(ORBIT_CONFIGS):
-        idx = 0
-    orbit_cfg = ORBIT_CONFIGS[idx]
-    if orbit_cfg.get("tle_lines"):
-        env = OrbitEnvironment(tle_lines=orbit_cfg.get("tle_lines"))
-    else:
-        env = OrbitEnvironment(
-            altitude_km=orbit_cfg.get("altitude_km"),
-            inclination_deg=orbit_cfg.get("inclination_deg"),
+    try:
+        if idx < 0 or idx >= len(ORBIT_CONFIGS):
+            idx = 0
+        orbit_cfg = ORBIT_CONFIGS[idx]
+        if orbit_cfg.get("tle_lines"):
+            env = OrbitEnvironment(tle_lines=orbit_cfg.get("tle_lines"))
+        else:
+            env = OrbitEnvironment(
+                altitude_km=orbit_cfg.get("altitude_km"),
+                inclination_deg=orbit_cfg.get("inclination_deg"),
+            )
+
+        period_s = env.orbit.period.to(u.s).value
+        eclipse_duration_s = env.eclipse_fraction * period_s
+        _, _, thermal_buf, _ = run_thermal_eclipse_model(
+            orbit_period_s=period_s,
+            eclipse_duration_s=eclipse_duration_s,
+            t_total=period_s * 5,
+            dt=60,
+            plot3d=True,
+            verbose=False,
         )
+        orbit_buf = plot_orbit_to_buffer(env)
 
-    period_s = env.orbit.period.to(u.s).value
-    eclipse_duration_s = env.eclipse_fraction * period_s
-    _, _, thermal_buf, _ = run_thermal_eclipse_model(
-        orbit_period_s=period_s,
-        eclipse_duration_s=eclipse_duration_s,
-        t_total=period_s * 5,
-        dt=60,
-        plot3d=True,
-        verbose=False,
-    )
-    orbit_buf = plot_orbit_to_buffer(env)
-
-    data = {
-        "orbit_plot": base64.b64encode(orbit_buf.getvalue()).decode("utf-8"),
-        "thermal_plot": (
-            base64.b64encode(thermal_buf.getvalue()).decode("utf-8")
-            if thermal_buf
-            else None
-        ),
-    }
-    return jsonify(data)
+        data = {
+            "orbit_plot": base64.b64encode(orbit_buf.getvalue()).decode("utf-8"),
+            "thermal_plot": (
+                base64.b64encode(thermal_buf.getvalue()).decode("utf-8")
+                if thermal_buf
+                else None
+            ),
+        }
+        return jsonify(data)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/simulate", methods=["POST"])
 def api_simulate():
-    data = request.get_json()
+    try:
+        data = request.get_json()
 
-    idx = int(data.get("orbit", 0))
-    if idx < 0 or idx >= len(ORBIT_CONFIGS):
-        idx = 0
-    orbit_cfg = ORBIT_CONFIGS[idx]
+        idx = int(data.get("orbit", 0))
+        if idx < 0 or idx >= len(ORBIT_CONFIGS):
+            idx = 0
+        orbit_cfg = ORBIT_CONFIGS[idx]
 
-    if orbit_cfg.get("tle_lines"):
-        env = OrbitEnvironment(tle_lines=orbit_cfg.get("tle_lines"))
-    else:
-        env = OrbitEnvironment(
-            altitude_km=orbit_cfg.get("altitude_km"),
-            inclination_deg=orbit_cfg.get("inclination_deg"),
+        if orbit_cfg.get("tle_lines"):
+            env = OrbitEnvironment(tle_lines=orbit_cfg.get("tle_lines"))
+        else:
+            env = OrbitEnvironment(
+                altitude_km=orbit_cfg.get("altitude_km"),
+                inclination_deg=orbit_cfg.get("inclination_deg"),
+            )
+
+        period_s = env.orbit.period.to(u.s).value
+        eclipse_duration_s = env.eclipse_fraction * period_s
+        _, _, thermal_buf, temp_stats = run_thermal_eclipse_model(
+            orbit_period_s=period_s,
+            eclipse_duration_s=eclipse_duration_s,
+            t_total=period_s * 5,
+            dt=60,
+            plot3d=True,
+            verbose=False,
         )
 
-    period_s = env.orbit.period.to(u.s).value
-    eclipse_duration_s = env.eclipse_fraction * period_s
-    _, _, thermal_buf, temp_stats = run_thermal_eclipse_model(
-        orbit_period_s=period_s,
-        eclipse_duration_s=eclipse_duration_s,
-        t_total=period_s * 5,
-        dt=60,
-        plot3d=True,
-        verbose=False,
-    )
+        if orbit_cfg.get("tle_lines"):
+            rf = full_rf_visibility_simulation(
+                tle=orbit_cfg.get("tle_lines"), duration_days=1, verbose=False
+            )
+        else:
+            rf = {}
 
-    if orbit_cfg.get("tle_lines"):
-        rf = full_rf_visibility_simulation(
-            tle=orbit_cfg.get("tle_lines"), duration_days=1, verbose=False
-        )
-    else:
-        rf = {}
+        orbit_buf = plot_orbit_to_buffer(env)
 
-    orbit_buf = plot_orbit_to_buffer(env)
-
-    result = {
-        "orbit": orbit_cfg.get("name"),
-        "thermal_stats": temp_stats,
-        "rf_summary": rf,
-        "orbit_plot": base64.b64encode(orbit_buf.getvalue()).decode("utf-8"),
-        "thermal_plot": (
-            base64.b64encode(thermal_buf.getvalue()).decode("utf-8")
-            if thermal_buf
-            else None
-        ),
-    }
-    return jsonify(result)
+        result = {
+            "orbit": orbit_cfg.get("name"),
+            "thermal_stats": temp_stats,
+            "rf_summary": rf,
+            "orbit_plot": base64.b64encode(orbit_buf.getvalue()).decode("utf-8"),
+            "thermal_plot": (
+                base64.b64encode(thermal_buf.getvalue()).decode("utf-8")
+                if thermal_buf
+                else None
+            ),
+        }
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
