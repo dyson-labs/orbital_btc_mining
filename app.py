@@ -1,10 +1,14 @@
 # app.py
 
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_file
 
 # === ANALYSIS FOLDER ===
-from analysis.one_pager import generate_one_pager
-from analysis.plot_summary_table import plot_summary_table_to_buffer
+import base64
+import json
+import os
+import pandas as pd
+from astropy import units as u
+from analysis.orbit_plot import plot_orbit_to_buffer
 
 # === MAIN/UTILS (core orchestrator) ===
 from main import run_simulation
@@ -28,68 +32,131 @@ from costmodel.cost import run_cost_model
 
 app = Flask(__name__)
 
-# Example dropdowns (update as you like)
+ROOT = os.path.dirname(os.path.abspath(__file__))
+orbits_path = os.path.join(ROOT, "config", "orbits_to_test.json")
+with open(orbits_path, "r", encoding="utf-8-sig") as f:
+    try:
+        ORBIT_CONFIGS = json.load(f)
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"Failed to parse {orbits_path}: {e}")
 ORBIT_OPTIONS = [
-    ("LEO", "Low Earth Orbit (LEO)"),
-    ("MEO", "Medium Earth Orbit (MEO)"),
-    ("GEO", "Geostationary Orbit (GEO)")
+    (str(i), o.get("name", f"Orbit {i}")) for i, o in enumerate(ORBIT_CONFIGS)
 ]
-LAUNCH_OPTIONS = [
-    ("falcon9", "Falcon 9"),
-    ("starship", "Starship"),
-    ("electron", "Electron")
-]
-LAUNCH_REGIME_OPTIONS = [
-    ("current", "Current"),
-    ("early", "Early"),
-    ("late", "Late")
-]
+
+launch_db = pd.read_csv(os.path.join(ROOT, "launch", "launcher_db.csv"))
+vehicles = sorted(launch_db["vehicle"].unique())
+LAUNCH_OPTIONS = [(v, v) for v in vehicles]
+LAUNCH_REGIME_OPTIONS = [("current", "Current"), ("early", "Early"), ("late", "Late")]
 SAT_CLASS_OPTIONS = [
     ("cubesat", "CubeSat"),
     ("espa", "ESPA-Class"),
     ("mw", "MW-Class"),
-    ("40mw", "MMW-Class")
+    ("40mw", "MMW-Class"),
 ]
-BITCOIN_PRICE_APPRECIATION_OPTIONS = [(str(i), f"{i}%") for i in range(0, 46, 5)]
-BITCOIN_HASH_GROWTH_OPTIONS = [(str(i), f"{i}%") for i in range(0, 46, 5)]
+BITCOIN_PRICE_APPRECIATION_OPTIONS = [(str(i), f"{i}%") for i in range(-50, 51, 5)]
+BITCOIN_HASH_GROWTH_OPTIONS = [(str(i), f"{i}%") for i in range(-50, 51, 5)]
 
-@app.route('/')
+
+@app.route("/")
 def index():
     return render_template(
-        'index.html',
+        "index.html",
         orbits=ORBIT_OPTIONS,
         launches=LAUNCH_OPTIONS,
         regimes=LAUNCH_REGIME_OPTIONS,
         sat_classes=SAT_CLASS_OPTIONS,
         btc_appreciations=BITCOIN_PRICE_APPRECIATION_OPTIONS,
-        btc_hash_grows=BITCOIN_HASH_GROWTH_OPTIONS
+        btc_hash_grows=BITCOIN_HASH_GROWTH_OPTIONS,
     )
 
-@app.route('/api/simulate', methods=['POST'])
+
+@app.route("/orbit_visuals/<int:idx>")
+def orbit_visuals(idx: int):
+    """Return orbit and thermal plots for the selected orbit."""
+    if idx < 0 or idx >= len(ORBIT_CONFIGS):
+        idx = 0
+    orbit_cfg = ORBIT_CONFIGS[idx]
+    if orbit_cfg.get("tle_lines"):
+        env = OrbitEnvironment(tle_lines=orbit_cfg.get("tle_lines"))
+    else:
+        env = OrbitEnvironment(
+            altitude_km=orbit_cfg.get("altitude_km"),
+            inclination_deg=orbit_cfg.get("inclination_deg"),
+        )
+
+    period_s = env.orbit.period.to(u.s).value
+    eclipse_duration_s = env.eclipse_fraction * period_s
+    _, _, thermal_buf, _ = run_thermal_eclipse_model(
+        orbit_period_s=period_s,
+        eclipse_duration_s=eclipse_duration_s,
+        t_total=period_s * 5,
+        dt=60,
+        plot3d=True,
+        verbose=False,
+    )
+    orbit_buf = plot_orbit_to_buffer(env)
+
+    data = {
+        "orbit_plot": base64.b64encode(orbit_buf.getvalue()).decode("utf-8"),
+        "thermal_plot": (
+            base64.b64encode(thermal_buf.getvalue()).decode("utf-8")
+            if thermal_buf
+            else None
+        ),
+    }
+    return jsonify(data)
+
+
+@app.route("/api/simulate", methods=["POST"])
 def api_simulate():
     data = request.get_json()
-    # Example of extracting selections
-    selected_orbit = data.get('orbit')
-    selected_launch = data.get('launch')
-    selected_regime = data.get('regime')
-    selected_sat_class = data.get('sat_class')
-    btc_appreciation = float(data.get('btc_appreciation', 0)) / 100
-    btc_hash_growth = float(data.get('btc_hash_growth', 0)) / 100
 
-    # Here you would map sat_class to actual values, and pass all to your run_simulation()
-    # For now, just return what was chosen:
+    idx = int(data.get("orbit", 0))
+    if idx < 0 or idx >= len(ORBIT_CONFIGS):
+        idx = 0
+    orbit_cfg = ORBIT_CONFIGS[idx]
+
+    if orbit_cfg.get("tle_lines"):
+        env = OrbitEnvironment(tle_lines=orbit_cfg.get("tle_lines"))
+    else:
+        env = OrbitEnvironment(
+            altitude_km=orbit_cfg.get("altitude_km"),
+            inclination_deg=orbit_cfg.get("inclination_deg"),
+        )
+
+    period_s = env.orbit.period.to(u.s).value
+    eclipse_duration_s = env.eclipse_fraction * period_s
+    _, _, thermal_buf, temp_stats = run_thermal_eclipse_model(
+        orbit_period_s=period_s,
+        eclipse_duration_s=eclipse_duration_s,
+        t_total=period_s * 5,
+        dt=60,
+        plot3d=True,
+        verbose=False,
+    )
+
+    if orbit_cfg.get("tle_lines"):
+        rf = full_rf_visibility_simulation(
+            tle=orbit_cfg.get("tle_lines"), duration_days=1, verbose=False
+        )
+    else:
+        rf = {}
+
+    orbit_buf = plot_orbit_to_buffer(env)
+
     result = {
-        "orbit": selected_orbit,
-        "launch": selected_launch,
-        "regime": selected_regime,
-        "sat_class": selected_sat_class,
-        "btc_appreciation": btc_appreciation,
-        "btc_hash_growth": btc_hash_growth,
-        "message": "You can now call your simulation and return real results here!"
+        "orbit": orbit_cfg.get("name"),
+        "thermal_stats": temp_stats,
+        "rf_summary": rf,
+        "orbit_plot": base64.b64encode(orbit_buf.getvalue()).decode("utf-8"),
+        "thermal_plot": (
+            base64.b64encode(thermal_buf.getvalue()).decode("utf-8")
+            if thermal_buf
+            else None
+        ),
     }
     return jsonify(result)
 
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)
