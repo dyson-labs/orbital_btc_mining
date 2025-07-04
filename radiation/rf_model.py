@@ -1183,8 +1183,19 @@ def rf_margin_plot_to_buffer(tle, networks=None, dt=60, verbose=False):
     return buf
 
 
-def constant_margin_plot_to_buffer(margin_dB=20.0, period_s=5400, dt=60):
-    """Return a simple plot with constant margin over one orbit."""
+def constant_margin_plot_to_buffer(margin_dB=5.0, period_s=5400, dt=60):
+    """Return a simple plot with constant margin over one orbit.
+
+    Parameters
+    ----------
+    margin_dB : float, optional
+        Fixed link margin to display. Defaults to ``5`` dB which indicates
+        a reliable relay link.
+    period_s : float, optional
+        Orbit period in seconds.
+    dt : int, optional
+        Time step between points.
+    """
     times = np.arange(0, period_s + dt, dt)
     margins = np.full_like(times, margin_dB, dtype=float)
     hours = times / 3600.0

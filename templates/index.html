@@ -105,11 +105,13 @@
                 gs.disabled = false;
                 gs.style.opacity = 1;
             }
+            updateOrbit();
         }
 
         function updateOrbit() {
             const idx = document.getElementById('orbit').value;
-            fetch(`/orbit_visuals/${idx}`)
+            const comms = document.getElementById('comms_mode').value;
+            fetch(`/orbit_visuals/${idx}?comms=${comms}`)
                 .then(res => {
                     if (!res.ok) throw new Error('Server error ' + res.status);
                     return res.json();

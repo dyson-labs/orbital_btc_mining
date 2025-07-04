@@ -132,7 +132,11 @@ def index():
 
 @app.route("/orbit_visuals/<int:idx>")
 def orbit_visuals(idx: int):
-    """Return orbit and thermal plots for the selected orbit."""
+    """Return orbit and thermal plots for the selected orbit.
+
+    The communications mode (``ground`` or ``relay``) may be supplied via the
+    ``comms`` query parameter to choose an appropriate RF margin plot.
+    """
     try:
         if idx < 0 or idx >= len(ORBIT_CONFIGS):
             idx = 0
@@ -157,7 +161,10 @@ def orbit_visuals(idx: int):
         )
         orbit_buf = plot_orbit_to_buffer(env)
         rf_buf = None
-        if orbit_cfg.get("tle_lines"):
+        comms_mode = request.args.get("comms", "ground")
+        if comms_mode == "relay":
+            rf_buf = constant_margin_plot_to_buffer(margin_dB=1.0, period_s=period_s)
+        elif orbit_cfg.get("tle_lines"):
             rf_buf = rf_margin_plot_to_buffer(
                 orbit_cfg.get("tle_lines"), networks=None, dt=60, verbose=False
             )
@@ -215,7 +222,7 @@ def api_simulate():
                 "Downlink % of mission": "100",
                 "Uplink % of mission": "100",
             }
-            rf_buf = constant_margin_plot_to_buffer(period_s=period_s)
+            rf_buf = constant_margin_plot_to_buffer(margin_dB=1.0, period_s=period_s)
         else:
             if orbit_cfg.get("tle_lines"):
                 networks = None if gs_network == "all" else gs_network
