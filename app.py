@@ -57,8 +57,7 @@ LAUNCH_OPTIONS = [(v, v) for v in vehicles]
 SAT_CLASS_OPTIONS = [
     ("cubesat", "CubeSat"),
     ("espa", "ESPA-Class"),
-    ("mw", "MW-Class"),
-    ("40mw", "MMW-Class"),
+    ("multimw", "MultiMW Class"),
 ]
 BITCOIN_PRICE_APPRECIATION_OPTIONS = [(str(i), f"{i}%") for i in range(-50, 51, 5)]
 BITCOIN_HASH_GROWTH_OPTIONS = [(str(i), f"{i}%") for i in range(-50, 51, 5)]
@@ -70,10 +69,14 @@ NETWORK_OPTIONS = [("all", "All Ground Stations")] + [
 SAT_CLASS_LOOKUP = {
     "cubesat": dict(payload_mass_kg=1, power_w=40, solar_area_m2=0.015, asic_count=3),
     "espa": dict(payload_mass_kg=150, power_w=2200, solar_area_m2=8, asic_count=240),
-    "mw": dict(
-        payload_mass_kg=10000, power_w=1_000_000, solar_area_m2=3640, asic_count=111_111
+    # MultiMW class parameters will be generated dynamically from these baselines
+    "multimw_base_1": dict(
+        payload_mass_kg=10000,
+        power_w=1_000_000,
+        solar_area_m2=3640,
+        asic_count=111_111,
     ),
-    "40mw": dict(
+    "multimw_base_40": dict(
         payload_mass_kg=100000,
         power_w=40_000_000,
         solar_area_m2=145_454,
@@ -98,7 +101,8 @@ SAT_COST_LOOKUP = {
         overhead=750_000,
         contingency=0.20,
     ),
-    "mw": dict(
+    # Baseline costs for MultiMW scaling
+    "multimw_base_1": dict(
         bus_cost=10_000_000,
         payload_cost=1_700_000,
         integration_cost=5_000_000,
@@ -106,7 +110,7 @@ SAT_COST_LOOKUP = {
         overhead=8_000_000,
         contingency=0.15,
     ),
-    "40mw": dict(
+    "multimw_base_40": dict(
         bus_cost=15_000_000,
         payload_cost=75_000_000,
         integration_cost=10_000_000,
@@ -115,6 +119,49 @@ SAT_COST_LOOKUP = {
         contingency=0.15,
     ),
 }
+
+
+def _interp(val, x0, y0, x1, y1):
+    """Linear interpolation/extrapolation helper."""
+    return y0 + (y1 - y0) * (val - x0) / (x1 - x0)
+
+
+def build_multimw_params(power_mw: float):
+    """Return spec and cost dicts for a MultiMW satellite."""
+    spec1 = SAT_CLASS_LOOKUP["multimw_base_1"]
+    spec40 = SAT_CLASS_LOOKUP["multimw_base_40"]
+    cost1 = SAT_COST_LOOKUP["multimw_base_1"]
+    cost40 = SAT_COST_LOOKUP["multimw_base_40"]
+
+    params = {
+        "payload_mass_kg": _interp(
+            power_mw, 1, spec1["payload_mass_kg"], 40, spec40["payload_mass_kg"]
+        ),
+        "power_w": power_mw * 1_000_000,
+        "solar_area_m2": _interp(
+            power_mw, 1, spec1["solar_area_m2"], 40, spec40["solar_area_m2"]
+        ),
+        "asic_count": int(
+            round(_interp(power_mw, 1, spec1["asic_count"], 40, spec40["asic_count"]))
+        ),
+    }
+
+    costs = {
+        "bus_cost": _interp(power_mw, 1, cost1["bus_cost"], 40, cost40["bus_cost"]),
+        "payload_cost": _interp(
+            power_mw, 1, cost1["payload_cost"], 40, cost40["payload_cost"]
+        ),
+        "integration_cost": _interp(
+            power_mw, 1, cost1["integration_cost"], 40, cost40["integration_cost"]
+        ),
+        "comms_cost": _interp(
+            power_mw, 1, cost1["comms_cost"], 40, cost40["comms_cost"]
+        ),
+        "overhead": _interp(power_mw, 1, cost1["overhead"], 40, cost40["overhead"]),
+        "contingency": cost1["contingency"],
+    }
+
+    return params, costs
 
 
 @app.route("/")
@@ -246,8 +293,12 @@ def api_simulate():
 
         # --- Power and Cost Models ---
         sat_class = data.get("sat_class", "cubesat")
-        params = SAT_CLASS_LOOKUP.get(sat_class, SAT_CLASS_LOOKUP["cubesat"])
-        costs = SAT_COST_LOOKUP.get(sat_class, SAT_COST_LOOKUP["cubesat"])
+        if sat_class == "multimw":
+            power_mw = float(data.get("multimw_power", 1))
+            params, costs = build_multimw_params(power_mw)
+        else:
+            params = SAT_CLASS_LOOKUP.get(sat_class, SAT_CLASS_LOOKUP["cubesat"])
+            costs = SAT_COST_LOOKUP.get(sat_class, SAT_COST_LOOKUP["cubesat"])
 
         launch_model = LaunchModel()
         altitude = env.altitude_km or orbit_cfg.get("altitude_km", 500)
@@ -269,8 +320,8 @@ def api_simulate():
         if launch_cost == 0 and launch_opts:
             launch_cost = min(o["total_cost_usd"] for o in launch_opts)
 
-        btc_app = float(data.get("btc_appreciation", 0)) / 100.0
-        btc_hash = float(data.get("btc_hash_growth", 0)) / 100.0
+        btc_app = float(data.get("btc_appreciation", 15)) / 100.0
+        btc_hash = float(data.get("btc_hash_growth", 25)) / 100.0
 
         mission_life = float(data.get("mission_life", 5))
         capex = {
