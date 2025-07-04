@@ -3,9 +3,13 @@
 <head>
     <title>BTC Mining Satellite Configurator</title>
     <style>
+        body { font-family: Arial, sans-serif; max-width: 1000px; margin: auto; }
         label { font-weight: bold; }
         .slider-label { margin-bottom: 4px; display: block; }
         .slider-value { display: inline-block; min-width: 40px; }
+        #visuals, #textual { display: flex; flex-wrap: wrap; gap: 10px; }
+        #visuals img { max-width: 320px; }
+        #textual pre { background:#f5f5f5; padding:10px; margin:0; width:320px; }
     </style>
 </head>
 <body>
@@ -33,7 +37,7 @@
         </select>
         <br><br>
         <label for="comms_mode">Comms Uptime:</label>
-        <select id="comms_mode" name="comms_mode">
+        <select id="comms_mode" name="comms_mode" onchange="updateCommsMode()">
             <option value="ground">Ground Stations</option>
             <option value="relay">GEO/ISR Relay (100%)</option>
         </select>
@@ -61,16 +65,48 @@
     </form>
     <div id="results" style="margin-top: 2em; color: green;"></div>
     <div id="visuals" style="margin-top: 1em;">
-        <img id="orbit_img" alt="Orbit plot" style="max-width: 400px; display:none;" />
-        <img id="thermal_img" alt="Thermal plot" style="max-width: 400px; display:none;" />
-        <img id="rf_plot_img" alt="RF Margin" style="max-width: 400px; display:none;" />
-        <img id="roi_img" alt="ROI plot" style="max-width: 400px; display:none;" />
+        <img id="orbit_img" alt="Orbit plot" style="display:none;" />
+        <img id="thermal_img" alt="Thermal plot" style="display:none;" />
+        <img id="rf_plot_img" alt="RF Margin" style="display:none;" />
+        <img id="roi_img" alt="ROI plot" style="display:none;" />
     </div>
-    <pre id="rf_summary" style="background:#f5f5f5; padding:10px;"></pre>
-    <pre id="cost_breakdown" style="background:#f5f5f5; padding:10px;"></pre>
-    <pre id="spec_summary" style="background:#f5f5f5; padding:10px;"></pre>
-    <pre id="rad_summary" style="background:#f5f5f5; padding:10px;"></pre>
+    <div id="textual" style="margin-top:1em;">
+        <pre id="rf_summary"></pre>
+        <pre id="cost_breakdown"></pre>
+        <pre id="spec_summary"></pre>
+        <pre id="rad_summary"></pre>
+    </div>
     <script>
+        function formatValue(v) {
+            if (typeof v === 'number') return v.toLocaleString();
+            if (typeof v === 'string') {
+                const m = v.match(/^(-?\d+(?:\.\d+)?)(.*)$/);
+                if (m) {
+                    const num = parseFloat(m[1]);
+                    return num.toLocaleString(undefined, {maximumFractionDigits:2}) + m[2];
+                }
+            }
+            return v;
+        }
+
+        function formatObject(obj) {
+            return Object.entries(obj)
+                .map(([k, v]) => k + ': ' + formatValue(v))
+                .join('\n');
+        }
+
+        function updateCommsMode() {
+            const mode = document.getElementById('comms_mode').value;
+            const gs = document.getElementById('gs_network');
+            if (mode === 'relay') {
+                gs.disabled = true;
+                gs.style.opacity = 0.5;
+            } else {
+                gs.disabled = false;
+                gs.style.opacity = 1;
+            }
+        }
+
         function updateOrbit() {
             const idx = document.getElementById('orbit').value;
             fetch(`/orbit_visuals/${idx}`)
@@ -155,17 +191,20 @@
                     document.getElementById('roi_img').src = 'data:image/png;base64,' + res.roi_plot;
                     document.getElementById('roi_img').style.display = 'block';
                 }
-                document.getElementById('rf_summary').innerText = JSON.stringify(res.rf_summary, null, 2);
-                document.getElementById('cost_breakdown').innerText = JSON.stringify(res.cost_summary, null, 2);
-                document.getElementById('spec_summary').innerText = JSON.stringify(res.specs, null, 2);
-                document.getElementById('rad_summary').innerText = JSON.stringify(res.radiation, null, 2);
+                document.getElementById('rf_summary').innerText = formatObject(res.rf_summary);
+                document.getElementById('cost_breakdown').innerText = formatObject(res.cost_summary);
+                document.getElementById('spec_summary').innerText = formatObject(res.specs);
+                document.getElementById('rad_summary').innerText = formatObject(res.radiation);
             })
             .catch(e => {
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('results').innerText = 'Error: ' + e;
             });
         }
-        window.onload = updateOrbit;
+        window.onload = function() {
+            updateCommsMode();
+            updateOrbit();
+        };
     </script>
 </body>
 </html>
