@@ -303,10 +303,16 @@ def api_simulate():
             years=cost_data["mission_lifetime"],
         )
 
-        power_model = PowerModel()
-        available_power = (
-            power_model.estimate_power(env.sunlight_fraction) * params["solar_area_m2"]
+        power_model = PowerModel(
+            power_density_w_m2=(
+                params["power_w"] / params["solar_area_m2"]
+                if params.get("solar_area_m2")
+                else 200
+            )
         )
+        # Report the rated power for the chosen satellite class so it aligns
+        # with the cost model's power value, avoiding inconsistent outputs.
+        available_power = params["power_w"]
 
         specs = {
             "asic_count": params["asic_count"],
