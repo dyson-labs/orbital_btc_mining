@@ -1165,10 +1165,29 @@ def rf_margin_timeseries(
 
 
 def rf_margin_plot_to_buffer(tle, networks=None, dt=60, verbose=False):
+    """Return an RF margin plot for one orbit."""
     times, margins = rf_margin_timeseries(
         tle, networks=networks, dt=dt, verbose=verbose
     )
     hours = np.array(times) / 3600.0
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.plot(hours, margins)
+    ax.set_xlabel("Time (hr)")
+    ax.set_ylabel("Downlink Margin (dB)")
+    ax.set_title("RF Margin Over One Orbit")
+    plt.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png")
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
+def constant_margin_plot_to_buffer(margin_dB=20.0, period_s=5400, dt=60):
+    """Return a simple plot with constant margin over one orbit."""
+    times = np.arange(0, period_s + dt, dt)
+    margins = np.full_like(times, margin_dB, dtype=float)
+    hours = times / 3600.0
     fig, ax = plt.subplots(figsize=(6, 4))
     ax.plot(hours, margins)
     ax.set_xlabel("Time (hr)")

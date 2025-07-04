@@ -32,6 +32,7 @@ from radiation.rf_model import (
     full_rf_visibility_simulation,
     ground_stations_by_network,
     rf_margin_plot_to_buffer,
+    constant_margin_plot_to_buffer,
 )
 
 # === COSTMODEL FOLDER ===
@@ -214,7 +215,7 @@ def api_simulate():
                 "Downlink % of mission": "100",
                 "Uplink % of mission": "100",
             }
-            rf_buf = None
+            rf_buf = constant_margin_plot_to_buffer(period_s=period_s)
         else:
             if orbit_cfg.get("tle_lines"):
                 networks = None if gs_network == "all" else gs_network
