@@ -74,6 +74,7 @@
     <div id="costContainer" style="border:1px solid #ccc; padding:10px; min-width:200px;">
         <h3>Cost Estimate</h3>
         <div id="cost_estimate">-</div>
+        <pre id="cost_estimate_breakdown" style="font-size:smaller;"></pre>
     </div>
     </div>
     <div id="results" style="margin-top: 2em; color: green;"></div>
@@ -185,9 +186,16 @@
             .then(res => {
                 document.getElementById('cost_estimate').innerText =
                     '$' + res.total_cost.toLocaleString();
+                if (res.breakdown) {
+                    document.getElementById('cost_estimate_breakdown').innerText =
+                        formatObject(res.breakdown);
+                } else {
+                    document.getElementById('cost_estimate_breakdown').innerText = '';
+                }
             })
             .catch(() => {
                 document.getElementById('cost_estimate').innerText = 'N/A';
+                document.getElementById('cost_estimate_breakdown').innerText = '';
             });
         }
 

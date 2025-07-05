@@ -270,7 +270,22 @@ def api_estimate_cost():
         }
         cost_data = run_cost_model(1.0, **capex)
 
-        return jsonify({"total_cost": cost_data["total_cost"]})
+        breakdown = {
+            k: cost_data[k]
+            for k in [
+                "bus_cost",
+                "payload_cost",
+                "integration_cost",
+                "launch_cost",
+                "comms_cost",
+                "overhead",
+                "contingency",
+                "total_cost",
+            ]
+            if k in cost_data
+        }
+
+        return jsonify({"total_cost": cost_data["total_cost"], "breakdown": breakdown})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
