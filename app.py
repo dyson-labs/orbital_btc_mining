@@ -232,6 +232,49 @@ def orbit_visuals(idx: int):
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/estimate_cost", methods=["POST"])
+def api_estimate_cost():
+    """Return mission cost estimate for current selections."""
+    try:
+        data = request.get_json()
+
+        sat_class = data.get("sat_class", "cubesat")
+        if sat_class == "multimw":
+            power_mw = float(data.get("multimw_power", 1))
+            params, costs = build_multimw_params(power_mw)
+        else:
+            params = SAT_CLASS_LOOKUP.get(sat_class, SAT_CLASS_LOOKUP["cubesat"])
+            costs = SAT_COST_LOOKUP.get(sat_class, SAT_COST_LOOKUP["cubesat"])
+
+        selected_vehicle = data.get("launch")
+        launch_model = LaunchModel()
+        row = launch_db[launch_db["vehicle"] == selected_vehicle]
+        when_available = "current"
+        if not row.empty:
+            when_available = row.iloc[0]["when_available"].strip().lower()
+        launch_opts = launch_model.find_options(
+            500, params["payload_mass_kg"], when_available=when_available
+        )
+        launch_cost = 0
+        for o in launch_opts:
+            if o["vehicle"] == selected_vehicle:
+                launch_cost = o["total_cost_usd"]
+                break
+        if launch_cost == 0 and launch_opts:
+            launch_cost = min(o["total_cost_usd"] for o in launch_opts)
+
+        capex = {
+            **costs,
+            "launch_cost": launch_cost,
+            "asic_count": params["asic_count"],
+        }
+        cost_data = run_cost_model(1.0, **capex)
+
+        return jsonify({"total_cost": cost_data["total_cost"]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/simulate", methods=["POST"])
 def api_simulate():
     try:

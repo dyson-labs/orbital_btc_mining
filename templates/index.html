@@ -14,6 +14,7 @@
 </head>
 <body>
     <h1>Configure Your Satellite Mission</h1>
+    <div id="configLayout" style="display:flex; gap:20px; align-items:flex-start;">
     <form id="configForm" onsubmit="return false;">
         <label for="orbit">Select Orbit:</label>
         <select id="orbit" name="orbit" onchange="updateOrbit()">
@@ -23,7 +24,7 @@
         </select>
         <br><br>
         <label for="launch">Select Launch Vehicle:</label>
-        <select id="launch" name="launch">
+        <select id="launch" name="launch" onchange="updateCost()">
             {% for value, label in launches %}
                 <option value="{{ value }}">{{ label }}</option>
             {% endfor %}
@@ -37,7 +38,7 @@
         </select>
         <div id="multimw_opts" style="display:none; margin-top:8px;">
             <span class="slider-label">MultiMW Power (MW): <span id="multimw_power_val">1</span></span>
-            <input type="range" id="multimw_power" name="multimw_power" min="1" max="60" value="1" step="1" oninput="document.getElementById('multimw_power_val').innerText=this.value;">
+            <input type="range" id="multimw_power" name="multimw_power" min="1" max="60" value="1" step="1" oninput="document.getElementById('multimw_power_val').innerText=this.value; updateCost();">
             <div style="font-size:smaller;">60&nbsp;MW nears the theoretical perfect compaction of a 0.005&nbsp;m panel inside Starship's payload volume, assuming roughly 275&nbsp;W/m<sup>2</sup> power density.</div>
         </div>
         <br>
@@ -70,6 +71,11 @@
             Simulating... Please wait.
         </div>
     </form>
+    <div id="costContainer" style="border:1px solid #ccc; padding:10px; min-width:200px;">
+        <h3>Cost Estimate</h3>
+        <div id="cost_estimate">-</div>
+    </div>
+    </div>
     <div id="results" style="margin-top: 2em; color: green;"></div>
     <div id="visuals" style="margin-top: 1em;">
         <img id="orbit_img" alt="Orbit plot" style="display:none;" />
@@ -113,12 +119,14 @@
                 gs.style.opacity = 1;
             }
             updateOrbit();
+            updateCost();
         }
 
         function updateSatClass() {
             const cls = document.getElementById('sat_class').value;
             const opts = document.getElementById('multimw_opts');
             opts.style.display = cls === 'multimw' ? 'block' : 'none';
+            updateCost();
         }
 
         function updateOrbit() {
@@ -152,6 +160,35 @@
                     document.getElementById('rf_plot_img').style.display = 'none';
                     console.error(e);
                 });
+            updateCost();
+        }
+
+        function gatherConfig() {
+            const data = {
+                launch: document.getElementById('launch').value,
+                sat_class: document.getElementById('sat_class').value,
+            };
+            if (data.sat_class === 'multimw') {
+                data.multimw_power = document.getElementById('multimw_power').value;
+            }
+            return data;
+        }
+
+        function updateCost() {
+            const cfg = gatherConfig();
+            fetch('/api/estimate_cost', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(cfg)
+            })
+            .then(r => r.ok ? r.json() : Promise.reject(r.status))
+            .then(res => {
+                document.getElementById('cost_estimate').innerText =
+                    '$' + res.total_cost.toLocaleString();
+            })
+            .catch(() => {
+                document.getElementById('cost_estimate').innerText = 'N/A';
+            });
         }
 
         function simulate() {
@@ -223,6 +260,7 @@
             updateCommsMode();
             updateSatClass();
             updateOrbit();
+            updateCost();
         };
     </script>
 </body>
