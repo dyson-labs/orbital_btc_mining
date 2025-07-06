@@ -40,6 +40,11 @@ from costmodel.cost import run_cost_model
 
 app = Flask(__name__)
 
+# ASIC performance defaults
+DEFAULT_HASHRATE_PER_ASIC = 0.63  # TH/s
+DEFAULT_POWER_PER_ASIC = 9  # W
+DEFAULT_EFFICIENCY_J_PER_TH = DEFAULT_POWER_PER_ASIC / DEFAULT_HASHRATE_PER_ASIC
+
 ROOT = os.path.dirname(os.path.abspath(__file__))
 orbits_path = os.path.join(ROOT, "config", "orbits_to_test.json")
 with open(orbits_path, "r", encoding="utf-8-sig") as f:
@@ -174,6 +179,7 @@ def index():
         btc_appreciations=BITCOIN_PRICE_APPRECIATION_OPTIONS,
         btc_hash_grows=BITCOIN_HASH_GROWTH_OPTIONS,
         networks=NETWORK_OPTIONS,
+        default_efficiency=round(DEFAULT_EFFICIENCY_J_PER_TH, 1),
     )
 
 
@@ -238,6 +244,9 @@ def api_estimate_cost():
     try:
         data = request.get_json()
 
+        efficiency = float(data.get("efficiency", DEFAULT_EFFICIENCY_J_PER_TH))
+        power_per_asic = efficiency * DEFAULT_HASHRATE_PER_ASIC
+
         sat_class = data.get("sat_class", "cubesat")
         if sat_class == "multimw":
             power_mw = float(data.get("multimw_power", 1))
@@ -271,6 +280,8 @@ def api_estimate_cost():
             **costs,
             "launch_cost": launch_cost,
             "asic_count": params["asic_count"],
+            "hashrate_per_asic": DEFAULT_HASHRATE_PER_ASIC,
+            "power_per_asic": power_per_asic,
         }
         cost_data = run_cost_model(1.0, **capex)
         cost_data["launch_cost_per_kg"] = cost_per_kg
@@ -398,6 +409,8 @@ def api_simulate():
             **costs,
             "launch_cost": launch_cost,
             "asic_count": params["asic_count"],
+            "hashrate_per_asic": DEFAULT_HASHRATE_PER_ASIC,
+            "power_per_asic": power_per_asic,
             "btc_price_growth": btc_app,
             "network_hashrate_growth": btc_hash,
             "mission_lifetime": mission_life,
@@ -409,7 +422,7 @@ def api_simulate():
             env.sunlight_fraction,
             mission_life,
             params["asic_count"],
-            hashrate_per_asic=capex.get("hashrate_per_asic", 0.63),
+            hashrate_per_asic=capex.get("hashrate_per_asic", DEFAULT_HASHRATE_PER_ASIC),
             btc_price=capex.get("btc_price", 105000.0),
             btc_price_growth=btc_app,
             network_hashrate_ehs=capex.get("network_hashrate_ehs", 700.0),
@@ -440,6 +453,7 @@ def api_simulate():
             "asic_count": params["asic_count"],
             "solar_area_m2": params["solar_area_m2"],
             "power_w": params["power_w"],
+            "asic_efficiency_j_per_th": efficiency,
             "solar_power_density_w_m2": (
                 params["power_w"] / params["solar_area_m2"]
                 if params["solar_area_m2"]

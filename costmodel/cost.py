@@ -96,4 +96,7 @@ def run_cost_model(solar_fraction, **kwargs):
         "avg_btc_price": avg_btc_price,
         "avg_network_hashrate": avg_network_hashrate,
         "mission_lifetime": mission_lifetime,
+        "power_per_asic": power_per_asic,
+        "hashrate_per_asic": hashrate_per_asic,
+        "efficiency_j_per_th": power_per_asic / hashrate_per_asic,
     }
