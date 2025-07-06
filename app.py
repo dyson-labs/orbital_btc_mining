@@ -42,8 +42,9 @@ app = Flask(__name__)
 
 # ASIC performance defaults
 DEFAULT_HASHRATE_PER_ASIC = 0.63  # TH/s
-DEFAULT_POWER_PER_ASIC = 9  # W
-DEFAULT_EFFICIENCY_J_PER_TH = DEFAULT_POWER_PER_ASIC / DEFAULT_HASHRATE_PER_ASIC
+# Default efficiency is 17 J/TH which implies ~10.7 W per ASIC
+DEFAULT_EFFICIENCY_J_PER_TH = 17.0
+DEFAULT_POWER_PER_ASIC = DEFAULT_EFFICIENCY_J_PER_TH * DEFAULT_HASHRATE_PER_ASIC
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 orbits_path = os.path.join(ROOT, "config", "orbits_to_test.json")
@@ -313,6 +314,9 @@ def api_estimate_cost():
 def api_simulate():
     try:
         data = request.get_json()
+
+        efficiency = float(data.get("efficiency", DEFAULT_EFFICIENCY_J_PER_TH))
+        power_per_asic = efficiency * DEFAULT_HASHRATE_PER_ASIC
 
         idx = int(data.get("orbit", 0))
         if idx < 0 or idx >= len(ORBIT_CONFIGS):

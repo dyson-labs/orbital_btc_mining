@@ -26,7 +26,7 @@ def run_cost_model(solar_fraction, **kwargs):
     # Core technical constants
     asic_count = kwargs.get("asic_count", 3)
     hashrate_per_asic = kwargs.get("hashrate_per_asic", 0.63)
-    power_per_asic = kwargs.get("power_per_asic", 9)
+    power_per_asic = kwargs.get("power_per_asic", 10.71)
     mission_lifetime = float(kwargs.get("mission_lifetime", 5))
     network_hashrate_ehs = float(kwargs.get("network_hashrate_ehs", 700))
     block_reward_btc = float(kwargs.get("block_reward_btc", 3.125))

@@ -43,7 +43,7 @@
         </div>
         <br>
         <span class="slider-label">ASIC Efficiency (J/TH, default {{ default_efficiency }}): <span id="efficiency_val">{{ default_efficiency }}</span></span>
-        <input type="range" id="efficiency" name="efficiency" min="{{ default_efficiency - 5 }}" max="{{ default_efficiency + 5 }}" value="{{ default_efficiency }}" step="0.1" oninput="document.getElementById('efficiency_val').innerText=this.value; updateCost();">
+        <input type="range" id="efficiency" name="efficiency" min="14" max="{{ default_efficiency + 5 }}" value="{{ default_efficiency }}" step="0.1" oninput="document.getElementById('efficiency_val').innerText=this.value; updateCost();">
         <br>
         <label for="comms_mode">Comms Uptime:</label>
         <select id="comms_mode" name="comms_mode" onchange="updateCommsMode()">
