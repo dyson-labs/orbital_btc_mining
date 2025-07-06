@@ -1,0 +1,15 @@
+astropy
+Flask
+google_auth_oauthlib
+gspread
+matplotlib
+numpy
+pandas
+poliastro
+protobuf
+python-dotenv
+reportlab
+scipy
+sgp4
+skyfield
+yagmail
