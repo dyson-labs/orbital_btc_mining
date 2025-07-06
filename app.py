@@ -271,18 +271,18 @@ def api_estimate_cost():
         cost_data = run_cost_model(1.0, **capex)
 
         breakdown = {
-            k: cost_data[k]
-            for k in [
-                "bus_cost",
-                "payload_cost",
-                "integration_cost",
-                "launch_cost",
-                "comms_cost",
-                "overhead",
-                "contingency",
-                "total_cost",
-            ]
-            if k in cost_data
+            "Bus Cost": {
+                "Structure": cost_data["bus_structure_cost"],
+                "Electronics": cost_data["bus_electronics_cost"],
+                "Total": cost_data["bus_cost"],
+            },
+            "Payload Cost": cost_data["payload_cost"],
+            "Integration Cost": cost_data["integration_cost"],
+            "Launch Cost": cost_data["launch_cost"],
+            "Comms Cost": cost_data["comms_cost"],
+            "Overhead": cost_data["overhead"],
+            "Contingency": cost_data["contingency"],
+            "Total Mission Cost": cost_data["total_cost"],
         }
 
         return jsonify({"total_cost": cost_data["total_cost"], "breakdown": breakdown})

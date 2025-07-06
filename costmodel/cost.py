@@ -2,8 +2,21 @@
 
 
 def run_cost_model(solar_fraction, **kwargs):
+    """Return mission cost and revenue projections.
+
+    ``bus_cost`` may be specified directly or as a combination of
+    ``bus_structure_cost`` and ``bus_electronics_cost`` which will be summed
+    to obtain the overall bus cost.  If component values are omitted they
+    default to a 60/40 split of the total bus cost.
+    """
+
     # Accept overrides or use defaults
     bus_cost = kwargs.get("bus_cost", 60000)
+    bus_structure_cost = kwargs.get("bus_structure_cost", bus_cost * 0.6)
+    bus_electronics_cost = kwargs.get(
+        "bus_electronics_cost", bus_cost - bus_structure_cost
+    )
+    bus_cost = bus_structure_cost + bus_electronics_cost
     payload_cost = kwargs.get("payload_cost", 60000)
     launch_cost = kwargs.get("launch_cost", 130000)
     overhead = kwargs.get("overhead", 160000)
@@ -66,6 +79,8 @@ def run_cost_model(solar_fraction, **kwargs):
     return {
         "total_cost": total_cost,
         "bus_cost": bus_cost,
+        "bus_structure_cost": bus_structure_cost,
+        "bus_electronics_cost": bus_electronics_cost,
         "payload_cost": payload_cost,
         "launch_cost": launch_cost,
         "overhead": overhead,

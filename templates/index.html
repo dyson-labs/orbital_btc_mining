@@ -72,9 +72,9 @@
         </div>
     </form>
     <div id="costContainer" style="border:1px solid #ccc; padding:10px; min-width:200px;">
-        <h3>Cost Estimate</h3>
+        <h1>Cost Estimate</h1>
         <div id="cost_estimate">-</div>
-        <pre id="cost_estimate_breakdown" style="font-size:smaller;"></pre>
+        <div id="cost_estimate_breakdown" style="font-size:smaller;"></div>
     </div>
     </div>
     <div id="results" style="margin-top: 2em; color: green;"></div>
@@ -86,7 +86,7 @@
     </div>
     <div id="textual" style="margin-top:1em;">
         <pre id="rf_summary"></pre>
-        <pre id="cost_breakdown"></pre>
+        <div id="cost_breakdown"></div>
         <pre id="spec_summary"></pre>
         <pre id="rad_summary"></pre>
     </div>
@@ -107,6 +107,20 @@
             return Object.entries(obj)
                 .map(([k, v]) => k + ': ' + formatValue(v))
                 .join('\n');
+        }
+
+        function formatCostHTML(obj, level = 2) {
+            let html = '';
+            for (const [k, v] of Object.entries(obj)) {
+                if (v && typeof v === 'object' && !Array.isArray(v)) {
+                    html += `<h${level}>${k}</h${level}>`;
+                    html += formatCostHTML(v, level + 1);
+                } else {
+                    const val = formatValue(v);
+                    html += `<h${level}>${k}: $${val}</h${level}>`;
+                }
+            }
+            return html;
         }
 
         function updateCommsMode() {
@@ -187,15 +201,15 @@
                 document.getElementById('cost_estimate').innerText =
                     '$' + res.total_cost.toLocaleString();
                 if (res.breakdown) {
-                    document.getElementById('cost_estimate_breakdown').innerText =
-                        formatObject(res.breakdown);
+                    document.getElementById('cost_estimate_breakdown').innerHTML =
+                        formatCostHTML(res.breakdown, 2);
                 } else {
-                    document.getElementById('cost_estimate_breakdown').innerText = '';
+                    document.getElementById('cost_estimate_breakdown').innerHTML = '';
                 }
             })
             .catch(() => {
                 document.getElementById('cost_estimate').innerText = 'N/A';
-                document.getElementById('cost_estimate_breakdown').innerText = '';
+                document.getElementById('cost_estimate_breakdown').innerHTML = '';
             });
         }
 
@@ -207,7 +221,7 @@
             document.getElementById('rf_plot_img').style.display = 'none';
             document.getElementById('roi_img').style.display = 'none';
             document.getElementById('rf_summary').innerText = '';
-            document.getElementById('cost_breakdown').innerText = '';
+            document.getElementById('cost_breakdown').innerHTML = '';
             document.getElementById('spec_summary').innerText = '';
             document.getElementById('rad_summary').innerText = '';
             const data = {
@@ -255,7 +269,7 @@
                     document.getElementById('roi_img').style.display = 'block';
                 }
                 document.getElementById('rf_summary').innerText = formatObject(res.rf_summary);
-                document.getElementById('cost_breakdown').innerText = formatObject(res.cost_summary);
+                document.getElementById('cost_breakdown').innerHTML = formatCostHTML(res.cost_summary, 2);
                 document.getElementById('spec_summary').innerText = formatObject(res.specs);
                 document.getElementById('rad_summary').innerText = formatObject(res.radiation);
             })
