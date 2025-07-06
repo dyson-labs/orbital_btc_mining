@@ -116,8 +116,20 @@
                     html += `<h${level}>${k}</h${level}>`;
                     html += formatCostHTML(v, level + 1);
                 } else {
-                    const val = formatValue(v);
-                    html += `<h${level}>${k}: $${val}</h${level}>`;
+                    const key = k.toLowerCase();
+                    let val = formatValue(v);
+                    if (key.includes('contingency')) {
+                        val = (parseFloat(v) * 100).toLocaleString(undefined, {maximumFractionDigits: 1}) + '%';
+                    } else if (key.includes('avg_network_hashrate')) {
+                        val = formatValue(v) + ' EH/s';
+                    } else if (key.includes('total_hashrate')) {
+                        val = formatValue(v) + ' TH/s';
+                    } else if (key.includes('btc_day') || key.includes('btc_year')) {
+                        val = '₿' + formatValue(v);
+                    } else if (key.includes('cost') || key.includes('revenue') || key.includes('profit') || key.includes('overhead') || key.includes('price')) {
+                        val = '$' + val;
+                    }
+                    html += `<h${level}>${k}: ${val}</h${level}>`;
                 }
             }
             return html;
