@@ -3,7 +3,8 @@ Falcon 9,LEO,22800,3000,current
 Falcon 9,GTO,8300,7000,current
 Falcon 9,GEO,4000,9000,current
 Electron,LEO,300,20000,current 
-Starship (Current),LEO,100000,5000,current
-Starship (Early),LEO,100000,500,early
-Starship (Late),LEO,100000,30,late
+Starship (Current),LEO,100000,1000,current
+Starship (1st gen),LEO,100000,500,early
+Starship (2nd gen),LEO,100000,30,late
+New Glenn (Current),LEO,45000,1500,current
 
