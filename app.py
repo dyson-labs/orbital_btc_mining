@@ -256,12 +256,16 @@ def api_estimate_cost():
             500, params["payload_mass_kg"], when_available=when_available
         )
         launch_cost = 0
+        cost_per_kg = 0
         for o in launch_opts:
             if o["vehicle"] == selected_vehicle:
                 launch_cost = o["total_cost_usd"]
+                cost_per_kg = o.get("cost_per_kg_usd", 0)
                 break
         if launch_cost == 0 and launch_opts:
-            launch_cost = min(o["total_cost_usd"] for o in launch_opts)
+            best = min(launch_opts, key=lambda x: x["total_cost_usd"])
+            launch_cost = best["total_cost_usd"]
+            cost_per_kg = best.get("cost_per_kg_usd", 0)
 
         capex = {
             **costs,
@@ -269,6 +273,7 @@ def api_estimate_cost():
             "asic_count": params["asic_count"],
         }
         cost_data = run_cost_model(1.0, **capex)
+        cost_data["launch_cost_per_kg"] = cost_per_kg
 
         breakdown = {
             "Bus Cost": {
@@ -278,7 +283,10 @@ def api_estimate_cost():
             },
             "Payload Cost": cost_data["payload_cost"],
             "Integration Cost": cost_data["integration_cost"],
-            "Launch Cost": cost_data["launch_cost"],
+            "Launch Cost": {
+                "Cost per kg": cost_per_kg,
+                "Cost": cost_data["launch_cost"],
+            },
             "Comms Cost": cost_data["comms_cost"],
             "Overhead": cost_data["overhead"],
             "Contingency": cost_data["contingency"],
@@ -371,12 +379,16 @@ def api_simulate():
             when_available=when_available,
         )
         launch_cost = 0
+        cost_per_kg = 0
         for o in launch_opts:
             if o["vehicle"] == selected_vehicle:
                 launch_cost = o["total_cost_usd"]
+                cost_per_kg = o.get("cost_per_kg_usd", 0)
                 break
         if launch_cost == 0 and launch_opts:
-            launch_cost = min(o["total_cost_usd"] for o in launch_opts)
+            best = min(launch_opts, key=lambda x: x["total_cost_usd"])
+            launch_cost = best["total_cost_usd"]
+            cost_per_kg = best.get("cost_per_kg_usd", 0)
 
         btc_app = float(data.get("btc_appreciation", 15)) / 100.0
         btc_hash = float(data.get("btc_hash_growth", 25)) / 100.0
@@ -391,6 +403,7 @@ def api_simulate():
             "mission_lifetime": mission_life,
         }
         cost_data = run_cost_model(env.sunlight_fraction, **capex)
+        cost_data["launch_cost_per_kg"] = cost_per_kg
 
         revenue_curve = project_revenue_curve(
             env.sunlight_fraction,

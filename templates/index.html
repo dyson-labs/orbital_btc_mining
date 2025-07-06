@@ -120,6 +120,8 @@
                     let val = formatValue(v);
                     if (key.includes('contingency')) {
                         val = (parseFloat(v) * 100).toLocaleString(undefined, {maximumFractionDigits: 1}) + '%';
+                    } else if (key.includes('cost_per_kg')) {
+                        val = '$' + formatValue(v) + '/kg';
                     } else if (key.includes('avg_network_hashrate')) {
                         val = formatValue(v) + ' EH/s';
                     } else if (key.includes('total_hashrate')) {
