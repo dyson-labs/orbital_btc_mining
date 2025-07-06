@@ -42,8 +42,8 @@ app = Flask(__name__)
 
 # ASIC performance defaults
 DEFAULT_HASHRATE_PER_ASIC = 0.63  # TH/s
-# Default efficiency is 17 J/TH which implies ~10.7 W per ASIC
-DEFAULT_EFFICIENCY_J_PER_TH = 17.0
+# Default efficiency is ~19 J/TH which implies about 12 W per ASIC
+DEFAULT_EFFICIENCY_J_PER_TH = 19.0
 DEFAULT_POWER_PER_ASIC = DEFAULT_EFFICIENCY_J_PER_TH * DEFAULT_HASHRATE_PER_ASIC
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
