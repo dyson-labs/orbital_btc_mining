@@ -1,7 +1,9 @@
 services:
   - type: web
     name: orbital-btc-mining
-    env: python
+    runtime: python
     plan: free
-    buildCommand: "pip install -r requirements.txt"
+    buildCommand: "./build.sh"
     startCommand: "gunicorn app:app"
+    pythonVersion: 3.11
+
