@@ -1,5 +1,21 @@
-.env"analysis/client.json" 
+# Python artifacts
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+venv/
+ENV/
+
+# Environment files
 .env
-bfg-1.15.0.jar
 client.json
 analysis/client.json
+
+# Jar files
+bfg-*.jar
+
+# Bytecode
+*.pyc
+
+# Misc
+.DS_Store
