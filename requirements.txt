@@ -14,3 +14,4 @@ skyfield==1.53
 sgp4==2.24
 setuptools==69.2.0
 wheel==0.43.0
+poliastro==0.18.0
