@@ -40,6 +40,12 @@ from costmodel.cost import run_cost_model
 
 app = Flask(__name__)
 
+
+@app.route("/healthz")
+def healthz():
+    """Simple health check endpoint for platform uptime probes."""
+    return "OK", 200
+
 # ASIC performance defaults
 DEFAULT_HASHRATE_PER_ASIC = 0.63  # TH/s
 # Default efficiency is ~19 J/TH which implies about 12 W per ASIC
