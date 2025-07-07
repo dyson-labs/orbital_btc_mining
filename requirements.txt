@@ -5,4 +5,10 @@ pandas==2.3.0
 matplotlib==3.7.1
 scipy==1.15.3
 astropy==5.3.4
+astroquery==0.4.10
 plotly==5.24.1
+reportlab==4.4.2
+requests==2.32.4
+jplephem==2.22
+skyfield==1.53
+sgp4==2.24
