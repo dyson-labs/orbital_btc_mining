@@ -1,7 +1,10 @@
 services:
   - type: web
-    name: orbital-btc-mining
+    name: orbital-bitcoin-mining-calculator
     env: python
-    plan: free
-    buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn app:app"
+    buildCommand: pip install -U pip setuptools wheel && pip install -r requirements.txt
+    startCommand: gunicorn app:app -b 0.0.0.0:$PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
+    healthCheckPath: "/health"
