@@ -6,3 +6,4 @@ services:
     buildCommand: "./build.sh"
     startCommand: "gunicorn app:app"
     pythonVersion: 3.11
+
