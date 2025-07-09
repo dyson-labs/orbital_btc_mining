@@ -45,6 +45,8 @@ DEFAULT_HASHRATE_PER_ASIC = 0.63  # TH/s
 # Default efficiency is ~19 J/TH which implies about 12 W per ASIC
 DEFAULT_EFFICIENCY_J_PER_TH = 19.0
 DEFAULT_POWER_PER_ASIC = DEFAULT_EFFICIENCY_J_PER_TH * DEFAULT_HASHRATE_PER_ASIC
+DEFAULT_SOLAR_POWER_W = 1000.0
+DEFAULT_SOLAR_COST_PER_W = 1000.0
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 orbits_path = os.path.join(ROOT, "config", "orbits_to_test.json")
@@ -181,6 +183,8 @@ def index():
         btc_hash_grows=BITCOIN_HASH_GROWTH_OPTIONS,
         networks=NETWORK_OPTIONS,
         default_efficiency=round(DEFAULT_EFFICIENCY_J_PER_TH, 1),
+        default_solar_power=DEFAULT_SOLAR_POWER_W,
+        default_solar_cost=DEFAULT_SOLAR_COST_PER_W,
     )
 
 
@@ -247,6 +251,19 @@ def api_estimate_cost():
 
         efficiency = float(data.get("efficiency", DEFAULT_EFFICIENCY_J_PER_TH))
         power_per_asic = efficiency * DEFAULT_HASHRATE_PER_ASIC
+
+        mode = data.get("mode", "dedicated")
+        if mode == "rideshare":
+            solar_power = float(data.get("solar_power", DEFAULT_SOLAR_POWER_W))
+            solar_cost = float(data.get("solar_cost", DEFAULT_SOLAR_COST_PER_W))
+            asic_count = int(solar_power / power_per_asic) if power_per_asic else 0
+            total_cost = solar_power * solar_cost
+            breakdown = {
+                "Solar Panel Cost": total_cost,
+                "Cost per W": solar_cost,
+                "ASIC Count": asic_count,
+            }
+            return jsonify({"total_cost": total_cost, "breakdown": breakdown})
 
         sat_class = data.get("sat_class", "cubesat")
         if sat_class == "multimw":
@@ -409,30 +426,68 @@ def api_simulate():
         btc_hash = float(data.get("btc_hash_growth", 25)) / 100.0
 
         mission_life = float(data.get("mission_life", 5))
-        capex = {
-            **costs,
-            "launch_cost": launch_cost,
-            "asic_count": params["asic_count"],
-            "hashrate_per_asic": DEFAULT_HASHRATE_PER_ASIC,
-            "power_per_asic": power_per_asic,
-            "btc_price_growth": btc_app,
-            "network_hashrate_growth": btc_hash,
-            "mission_lifetime": mission_life,
-        }
-        cost_data = run_cost_model(env.sunlight_fraction, **capex)
-        cost_data["launch_cost_per_kg"] = cost_per_kg
+        mode = data.get("mode", "dedicated")
+        if mode == "rideshare":
+            solar_power = float(data.get("solar_power", DEFAULT_SOLAR_POWER_W))
+            solar_cost = float(data.get("solar_cost", DEFAULT_SOLAR_COST_PER_W))
+            asic_power_pct = float(data.get("asic_power_pct", 100))
+            asic_count = int(solar_power / power_per_asic) if power_per_asic else 0
+            effective_fraction = env.sunlight_fraction * (asic_power_pct / 100.0)
+            capex = {
+                "bus_cost": 0,
+                "payload_cost": solar_power * solar_cost,
+                "launch_cost": 0,
+                "overhead": 0,
+                "integration_cost": 0,
+                "comms_cost": 0,
+                "contingency": 0,
+                "asic_count": asic_count,
+                "hashrate_per_asic": DEFAULT_HASHRATE_PER_ASIC,
+                "power_per_asic": power_per_asic,
+                "btc_price_growth": btc_app,
+                "network_hashrate_growth": btc_hash,
+                "mission_lifetime": mission_life,
+            }
+            cost_data = run_cost_model(effective_fraction, **capex)
+            cost_data["launch_cost_per_kg"] = 0
+        else:
+            capex = {
+                **costs,
+                "launch_cost": launch_cost,
+                "asic_count": params["asic_count"],
+                "hashrate_per_asic": DEFAULT_HASHRATE_PER_ASIC,
+                "power_per_asic": power_per_asic,
+                "btc_price_growth": btc_app,
+                "network_hashrate_growth": btc_hash,
+                "mission_lifetime": mission_life,
+            }
+            cost_data = run_cost_model(env.sunlight_fraction, **capex)
+            cost_data["launch_cost_per_kg"] = cost_per_kg
 
-        revenue_curve = project_revenue_curve(
-            env.sunlight_fraction,
-            mission_life,
-            params["asic_count"],
-            hashrate_per_asic=capex.get("hashrate_per_asic", DEFAULT_HASHRATE_PER_ASIC),
-            btc_price=capex.get("btc_price", 105000.0),
-            btc_price_growth=btc_app,
-            network_hashrate_ehs=capex.get("network_hashrate_ehs", 700.0),
-            network_hashrate_growth=btc_hash,
-            block_reward_btc=capex.get("block_reward_btc", 3.125),
-        )
+        if mode == "rideshare":
+            revenue_curve = project_revenue_curve(
+                effective_fraction,
+                mission_life,
+                asic_count,
+                hashrate_per_asic=DEFAULT_HASHRATE_PER_ASIC,
+                btc_price=capex.get("btc_price", 105000.0),
+                btc_price_growth=btc_app,
+                network_hashrate_ehs=capex.get("network_hashrate_ehs", 700.0),
+                network_hashrate_growth=btc_hash,
+                block_reward_btc=capex.get("block_reward_btc", 3.125),
+            )
+        else:
+            revenue_curve = project_revenue_curve(
+                env.sunlight_fraction,
+                mission_life,
+                params["asic_count"],
+                hashrate_per_asic=capex.get("hashrate_per_asic", DEFAULT_HASHRATE_PER_ASIC),
+                btc_price=capex.get("btc_price", 105000.0),
+                btc_price_growth=btc_app,
+                network_hashrate_ehs=capex.get("network_hashrate_ehs", 700.0),
+                network_hashrate_growth=btc_hash,
+                block_reward_btc=capex.get("block_reward_btc", 3.125),
+            )
         roi_buf = roi_plot_to_buffer(cost_data["total_cost"], revenue_curve, step=0.25)
 
         rad_model = RadiationModel()
@@ -442,28 +497,35 @@ def api_simulate():
             years=cost_data["mission_lifetime"],
         )
 
-        power_model = PowerModel(
-            power_density_w_m2=(
-                params["power_w"] / params["solar_area_m2"]
-                if params.get("solar_area_m2")
-                else 200
+        if mode == "rideshare":
+            available_power = solar_power
+            specs = {
+                "asic_count": asic_count,
+                "solar_power_w": solar_power,
+                "asic_efficiency_j_per_th": efficiency,
+                "asic_power_pct": asic_power_pct,
+            }
+        else:
+            power_model = PowerModel(
+                power_density_w_m2=(
+                    params["power_w"] / params["solar_area_m2"]
+                    if params.get("solar_area_m2")
+                    else 200
+                )
             )
-        )
-        # Report the rated power for the chosen satellite class so it aligns
-        # with the cost model's power value, avoiding inconsistent outputs.
-        available_power = params["power_w"]
+            available_power = params["power_w"]
 
-        specs = {
-            "asic_count": params["asic_count"],
-            "solar_area_m2": params["solar_area_m2"],
-            "power_w": params["power_w"],
-            "asic_efficiency_j_per_th": efficiency,
-            "solar_power_density_w_m2": (
-                params["power_w"] / params["solar_area_m2"]
-                if params["solar_area_m2"]
-                else None
-            ),
-        }
+            specs = {
+                "asic_count": params["asic_count"],
+                "solar_area_m2": params["solar_area_m2"],
+                "power_w": params["power_w"],
+                "asic_efficiency_j_per_th": efficiency,
+                "solar_power_density_w_m2": (
+                    params["power_w"] / params["solar_area_m2"]
+                    if params["solar_area_m2"]
+                    else None
+                ),
+            }
 
         result = {
             "orbit": orbit_cfg.get("name"),
