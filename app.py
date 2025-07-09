@@ -50,6 +50,7 @@ DEFAULT_SOLAR_POWER_W = 1000.0
 # but typical commercial rates are well below $100/W.
 DEFAULT_SOLAR_COST_PER_W = 10.0
 
+
 ROOT = os.path.dirname(os.path.abspath(__file__))
 orbits_path = os.path.join(ROOT, "config", "orbits_to_test.json")
 with open(orbits_path, "r", encoding="utf-8-sig") as f:
