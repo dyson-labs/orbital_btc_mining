@@ -55,7 +55,7 @@
             <span class="slider-label">Solar Panel Power (W): <span id="solar_power_val">{{ default_solar_power }}</span></span>
             <input type="range" id="solar_power" name="solar_power" min="100" max="10000" value="{{ default_solar_power }}" step="100" oninput="document.getElementById('solar_power_val').innerText=this.value; updateCost();">
             <span class="slider-label">Solar Cost ($/W): <span id="solar_cost_val">{{ default_solar_cost }}</span></span>
-            <input type="range" id="solar_cost" name="solar_cost" min="50" max="2000" value="{{ default_solar_cost }}" step="50" oninput="document.getElementById('solar_cost_val').innerText=this.value; updateCost();">
+            <input type="range" id="solar_cost" name="solar_cost" min="0.05" max="75" value="{{ default_solar_cost }}" step="0.05" oninput="document.getElementById('solar_cost_val').innerText=this.value; updateCost();">
             <span class="slider-label">ASIC Power Allocation (%): <span id="asic_power_pct_val">100</span>%</span>
             <input type="range" id="asic_power_pct" name="asic_power_pct" min="0" max="100" value="100" step="5" oninput="document.getElementById('asic_power_pct_val').innerText=this.value;">
         </div>
