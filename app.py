@@ -46,7 +46,11 @@ DEFAULT_HASHRATE_PER_ASIC = 0.63  # TH/s
 DEFAULT_EFFICIENCY_J_PER_TH = 19.0
 DEFAULT_POWER_PER_ASIC = DEFAULT_EFFICIENCY_J_PER_TH * DEFAULT_HASHRATE_PER_ASIC
 DEFAULT_SOLAR_POWER_W = 1000.0
-DEFAULT_SOLAR_COST_PER_W = 1000.0
+
+# Default rideshare solar panel price per Watt ($/W). Range may vary widely,
+# but typical commercial rates are well below $100/W.
+DEFAULT_SOLAR_COST_PER_W = 10.0
+
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 orbits_path = os.path.join(ROOT, "config", "orbits_to_test.json")
@@ -294,10 +298,15 @@ def api_estimate_cost():
             launch_cost = best["total_cost_usd"]
             cost_per_kg = best.get("cost_per_kg_usd", 0)
 
+        ded_power = float(data.get("ded_power", 0))
+        asic_override = None
+        if ded_power > 0 and sat_class in ("cubesat", "espa"):
+            asic_override = int(ded_power / power_per_asic) if power_per_asic else 0
+
         capex = {
             **costs,
             "launch_cost": launch_cost,
-            "asic_count": params["asic_count"],
+            "asic_count": asic_override if asic_override is not None else params["asic_count"],
             "hashrate_per_asic": DEFAULT_HASHRATE_PER_ASIC,
             "power_per_asic": power_per_asic,
         }
@@ -451,10 +460,16 @@ def api_simulate():
             cost_data = run_cost_model(effective_fraction, **capex)
             cost_data["launch_cost_per_kg"] = 0
         else:
+            ded_power = float(data.get("ded_power", 0))
+            asic_override = None
+            if ded_power > 0 and sat_class in ("cubesat", "espa"):
+                asic_override = int(ded_power / power_per_asic) if power_per_asic else 0
+
             capex = {
                 **costs,
                 "launch_cost": launch_cost,
-                "asic_count": params["asic_count"],
+                "asic_count": asic_override if asic_override is not None else params["asic_count"],
+
                 "hashrate_per_asic": DEFAULT_HASHRATE_PER_ASIC,
                 "power_per_asic": power_per_asic,
                 "btc_price_growth": btc_app,
@@ -480,7 +495,8 @@ def api_simulate():
             revenue_curve = project_revenue_curve(
                 env.sunlight_fraction,
                 mission_life,
-                params["asic_count"],
+                (asic_override if asic_override is not None else params["asic_count"]),
+
                 hashrate_per_asic=capex.get("hashrate_per_asic", DEFAULT_HASHRATE_PER_ASIC),
                 btc_price=capex.get("btc_price", 105000.0),
                 btc_price_growth=btc_app,
@@ -513,15 +529,17 @@ def api_simulate():
                     else 200
                 )
             )
-            available_power = params["power_w"]
+
+            available_power = ded_power if ded_power > 0 else params["power_w"]
 
             specs = {
-                "asic_count": params["asic_count"],
+                "asic_count": asic_override if asic_override is not None else params["asic_count"],
                 "solar_area_m2": params["solar_area_m2"],
-                "power_w": params["power_w"],
+                "power_w": available_power,
                 "asic_efficiency_j_per_th": efficiency,
                 "solar_power_density_w_m2": (
-                    params["power_w"] / params["solar_area_m2"]
+                    available_power / params["solar_area_m2"]
+
                     if params["solar_area_m2"]
                     else None
                 ),
