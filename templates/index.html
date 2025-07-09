@@ -30,6 +30,12 @@
             {% endfor %}
         </select>
         <br><br>
+        <label for="mode">Mission Type:</label>
+        <select id="mode" name="mode" onchange="updateMode()">
+            <option value="dedicated">Dedicated Bitcoin Miner</option>
+            <option value="rideshare">Rideshare Panels</option>
+        </select>
+        <br><br>
         <label for="sat_class">Select Satellite Class:</label>
         <select id="sat_class" name="sat_class" onchange="updateSatClass()">
             {% for value, label in sat_classes %}
@@ -45,6 +51,14 @@
         <span class="slider-label">ASIC Efficiency (J/TH, default {{ default_efficiency }}): <span id="efficiency_val">{{ default_efficiency }}</span></span>
         <input type="range" id="efficiency" name="efficiency" min="14" max="{{ default_efficiency + 5 }}" value="{{ default_efficiency }}" step="0.1" oninput="document.getElementById('efficiency_val').innerText=this.value; updateCost();">
         <br>
+        <div id="rideshare_opts" style="display:none; margin-bottom:10px;">
+            <span class="slider-label">Solar Panel Power (W): <span id="solar_power_val">{{ default_solar_power }}</span></span>
+            <input type="range" id="solar_power" name="solar_power" min="100" max="10000" value="{{ default_solar_power }}" step="100" oninput="document.getElementById('solar_power_val').innerText=this.value; updateCost();">
+            <span class="slider-label">Solar Cost ($/W): <span id="solar_cost_val">{{ default_solar_cost }}</span></span>
+            <input type="range" id="solar_cost" name="solar_cost" min="50" max="2000" value="{{ default_solar_cost }}" step="50" oninput="document.getElementById('solar_cost_val').innerText=this.value; updateCost();">
+            <span class="slider-label">ASIC Power Allocation (%): <span id="asic_power_pct_val">100</span>%</span>
+            <input type="range" id="asic_power_pct" name="asic_power_pct" min="0" max="100" value="100" step="5" oninput="document.getElementById('asic_power_pct_val').innerText=this.value;">
+        </div>
         <label for="comms_mode">Comms Uptime:</label>
         <select id="comms_mode" name="comms_mode" onchange="updateCommsMode()">
             <option value="ground">Ground Stations</option>
@@ -154,6 +168,14 @@
             updateCost();
         }
 
+        function updateMode() {
+            const m = document.getElementById('mode').value;
+            const r = document.getElementById('rideshare_opts');
+            r.style.display = m === 'rideshare' ? 'block' : 'none';
+            clearVisuals();
+            updateCost();
+        }
+
         function updateSatClass() {
             const cls = document.getElementById('sat_class').value;
             const opts = document.getElementById('multimw_opts');
@@ -178,9 +200,15 @@
                 launch: document.getElementById('launch').value,
                 sat_class: document.getElementById('sat_class').value,
                 efficiency: document.getElementById('efficiency').value,
+                mode: document.getElementById('mode').value
             };
             if (data.sat_class === 'multimw') {
                 data.multimw_power = document.getElementById('multimw_power').value;
+            }
+            if (data.mode === 'rideshare') {
+                data.solar_power = document.getElementById('solar_power').value;
+                data.solar_cost = document.getElementById('solar_cost').value;
+                data.asic_power_pct = document.getElementById('asic_power_pct').value;
             }
             return data;
         }
@@ -225,6 +253,7 @@
                 launch: document.getElementById('launch').value,
                 sat_class: document.getElementById('sat_class').value,
                 efficiency: document.getElementById('efficiency').value,
+                mode: document.getElementById('mode').value,
                 comms_mode: document.getElementById('comms_mode').value,
                 gs_network: document.getElementById('gs_network').value,
                 btc_appreciation: document.getElementById('btc_appreciation').value,
@@ -233,6 +262,11 @@
             };
             if (data.sat_class === 'multimw') {
                 data.multimw_power = document.getElementById('multimw_power').value;
+            }
+            if (data.mode === 'rideshare') {
+                data.solar_power = document.getElementById('solar_power').value;
+                data.solar_cost = document.getElementById('solar_cost').value;
+                data.asic_power_pct = document.getElementById('asic_power_pct').value;
             }
             fetch('/api/simulate', {
                 method: 'POST',
@@ -276,6 +310,7 @@
             });
         }
         window.onload = function() {
+            updateMode();
             updateCommsMode();
             updateSatClass();
             clearVisuals();
