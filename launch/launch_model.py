@@ -20,8 +20,6 @@ class LaunchModel:
 
     def find_options(self, altitude_km, payload_mass_kg, when_available="current"):
         orbit_class = self.classify_orbit(altitude_km)
-        print(self.db[['vehicle','orbit_class','max_payload_kg','cost_per_kg_usd','when_available']])
-        print("orbit_class:", orbit_class, "when_available:", when_available, "payload_mass_kg:", payload_mass_kg)
 
         matches = self.db[
             (self.db.orbit_class == orbit_class)
@@ -50,17 +48,16 @@ class LaunchModel:
 
         # Fallback if nothing feasible was found
         if not results:
-            # Fallback price per kg by regime
+            # Conservative fallback price per kg by regime
             DEFAULT_PRICE_PER_KG = {
-                "current": 5000,
+                "current": 1500,
                 "coming soon": 500,
                 "future": 50,
                 "late": 50,
                 "early": 500,
             }
-            fallback_price = DEFAULT_PRICE_PER_KG.get(when_available, 5000)
+            fallback_price = DEFAULT_PRICE_PER_KG.get(when_available, 1500)
             fallback_cost = fallback_price * payload_mass_kg
-            print(f"WARNING: No launch option found for {orbit_class} at regime '{when_available}'. Using fallback price ${fallback_price}/kg.")
             results.append({
                 "vehicle": "Fallback",
                 "orbit_class": orbit_class,
