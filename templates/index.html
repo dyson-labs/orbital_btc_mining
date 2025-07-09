@@ -60,6 +60,7 @@
             <input type="range" id="solar_power" name="solar_power" min="40" max="30000" value="{{ default_solar_power }}" step="10" oninput="document.getElementById('solar_power_val').innerText=this.value; updateCost();">
             <span class="slider-label">Solar Cost ($/W): <span id="solar_cost_val">{{ default_solar_cost }}</span></span>
             <input type="range" id="solar_cost" name="solar_cost" min="0.0005" max="75" value="{{ default_solar_cost }}" step="0.01" oninput="document.getElementById('solar_cost_val').innerText=this.value; updateCost();">
+
             <span class="slider-label">ASIC Power Allocation (%): <span id="asic_power_pct_val">100</span>%</span>
             <input type="range" id="asic_power_pct" name="asic_power_pct" min="0" max="100" value="100" step="5" oninput="document.getElementById('asic_power_pct_val').innerText=this.value;">
         </div>
@@ -176,6 +177,7 @@
             const m = document.getElementById('mode').value;
             const r = document.getElementById('rideshare_opts');
             r.style.display = m === 'rideshare' ? 'block' : 'none';
+
             const d = document.getElementById('ded_power_opts');
             if (m === 'dedicated') {
                 const cls = document.getElementById('sat_class').value;
@@ -183,6 +185,7 @@
             } else {
                 d.style.display = 'none';
             }
+
             clearVisuals();
             updateCost();
         }
@@ -232,8 +235,10 @@
                 data.solar_power = document.getElementById('solar_power').value;
                 data.solar_cost = document.getElementById('solar_cost').value;
                 data.asic_power_pct = document.getElementById('asic_power_pct').value;
+
             } else if (data.mode === 'dedicated' && (data.sat_class === 'cubesat' || data.sat_class === 'espa')) {
                 data.ded_power = document.getElementById('ded_power').value;
+
             }
             return data;
         }
@@ -292,8 +297,10 @@
                 data.solar_power = document.getElementById('solar_power').value;
                 data.solar_cost = document.getElementById('solar_cost').value;
                 data.asic_power_pct = document.getElementById('asic_power_pct').value;
+
             } else if (data.mode === 'dedicated' && (data.sat_class === 'cubesat' || data.sat_class === 'espa')) {
                 data.ded_power = document.getElementById('ded_power').value;
+
             }
             fetch('/api/simulate', {
                 method: 'POST',

@@ -46,9 +46,11 @@ DEFAULT_HASHRATE_PER_ASIC = 0.63  # TH/s
 DEFAULT_EFFICIENCY_J_PER_TH = 19.0
 DEFAULT_POWER_PER_ASIC = DEFAULT_EFFICIENCY_J_PER_TH * DEFAULT_HASHRATE_PER_ASIC
 DEFAULT_SOLAR_POWER_W = 1000.0
+
 # Default rideshare solar panel price per Watt ($/W). Range may vary widely,
 # but typical commercial rates are well below $100/W.
 DEFAULT_SOLAR_COST_PER_W = 10.0
+
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 orbits_path = os.path.join(ROOT, "config", "orbits_to_test.json")
@@ -467,6 +469,7 @@ def api_simulate():
                 **costs,
                 "launch_cost": launch_cost,
                 "asic_count": asic_override if asic_override is not None else params["asic_count"],
+
                 "hashrate_per_asic": DEFAULT_HASHRATE_PER_ASIC,
                 "power_per_asic": power_per_asic,
                 "btc_price_growth": btc_app,
@@ -493,6 +496,7 @@ def api_simulate():
                 env.sunlight_fraction,
                 mission_life,
                 (asic_override if asic_override is not None else params["asic_count"]),
+
                 hashrate_per_asic=capex.get("hashrate_per_asic", DEFAULT_HASHRATE_PER_ASIC),
                 btc_price=capex.get("btc_price", 105000.0),
                 btc_price_growth=btc_app,
@@ -525,6 +529,7 @@ def api_simulate():
                     else 200
                 )
             )
+
             available_power = ded_power if ded_power > 0 else params["power_w"]
 
             specs = {
@@ -534,6 +539,7 @@ def api_simulate():
                 "asic_efficiency_j_per_th": efficiency,
                 "solar_power_density_w_m2": (
                     available_power / params["solar_area_m2"]
+
                     if params["solar_area_m2"]
                     else None
                 ),
