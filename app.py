@@ -46,9 +46,11 @@ DEFAULT_HASHRATE_PER_ASIC = 0.63  # TH/s
 DEFAULT_EFFICIENCY_J_PER_TH = 19.0
 DEFAULT_POWER_PER_ASIC = DEFAULT_EFFICIENCY_J_PER_TH * DEFAULT_HASHRATE_PER_ASIC
 DEFAULT_SOLAR_POWER_W = 1000.0
+
 # Default rideshare solar panel price per Watt ($/W). Range may vary widely,
 # but typical commercial rates are well below $100/W.
 DEFAULT_SOLAR_COST_PER_W = 10.0
+
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 orbits_path = os.path.join(ROOT, "config", "orbits_to_test.json")
