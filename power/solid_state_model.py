@@ -25,6 +25,15 @@ class ModelState:
     btc_cumulative: float
 
 
+@dataclass
+class ModelOutput:
+    """Outputs from a single model step."""
+
+    battery_Wh: float
+    btc_rate: float
+    asic_temp_K: float
+
+
 def step(state: ModelState, u1: float, u2: float, u3: float, dt: float, params: ModelParams) -> ModelState:
     """Advance the model one timestep.
 
@@ -70,6 +79,16 @@ def step(state: ModelState, u1: float, u2: float, u3: float, dt: float, params: 
     return state
 
 
+def calc_outputs(state: ModelState, u3: float, params: ModelParams) -> ModelOutput:
+    """Return observable outputs for the current state and input."""
+
+    return ModelOutput(
+        battery_Wh=state.battery_Wh,
+        btc_rate=params.hash_eff * u3,
+        asic_temp_K=state.asic_temp_K,
+    )
+
+
 def simulate(
     u1: Iterable[float],
     u2: Iterable[float],
@@ -77,8 +96,25 @@ def simulate(
     dt: float,
     initial_state: ModelState,
     params: ModelParams,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Run a full simulation over the provided input sequences."""
+    *,
+    return_outputs: bool = False,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray] | Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Run a full simulation over the provided input sequences.
+
+    Parameters
+    ----------
+    u1, u2, u3 : Iterable[float]
+        Input sequences for solar power, mission load and ASIC throttle.
+    dt : float
+        Timestep in seconds.
+    initial_state : ModelState
+        Starting state for the simulation.
+    params : ModelParams
+        Configuration parameters.
+    return_outputs : bool, optional
+        If ``True``, return output histories ``(y1, y2, y3)`` in addition to the
+        state histories.
+    """
 
     u1 = np.asarray(list(u1), dtype=float)
     u2 = np.asarray(list(u2), dtype=float)
@@ -88,6 +124,10 @@ def simulate(
     x1_hist = np.empty(n)
     x2_hist = np.empty(n)
     x3_hist = np.empty(n)
+    if return_outputs:
+        y1_hist = np.empty(n)
+        y2_hist = np.empty(n)
+        y3_hist = np.empty(n)
 
     state = initial_state
     for i in range(n):
@@ -95,5 +135,12 @@ def simulate(
         x1_hist[i] = state.battery_Wh
         x2_hist[i] = state.asic_temp_K
         x3_hist[i] = state.btc_cumulative
+        if return_outputs:
+            out = calc_outputs(state, u3[i], params)
+            y1_hist[i] = out.battery_Wh
+            y2_hist[i] = out.btc_rate
+            y3_hist[i] = out.asic_temp_K
 
+    if return_outputs:
+        return x1_hist, x2_hist, x3_hist, y1_hist, y2_hist, y3_hist
     return x1_hist, x2_hist, x3_hist
