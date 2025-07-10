@@ -50,7 +50,6 @@ DEFAULT_SOLAR_POWER_W = 1000.0
 # but typical commercial rates are well below $100/W.
 DEFAULT_SOLAR_COST_PER_W = 10.0
 
-
 ROOT = os.path.dirname(os.path.abspath(__file__))
 orbits_path = os.path.join(ROOT, "config", "orbits_to_test.json")
 with open(orbits_path, "r", encoding="utf-8-sig") as f:
@@ -256,8 +255,13 @@ def api_estimate_cost():
         power_per_asic = efficiency * DEFAULT_HASHRATE_PER_ASIC
 
         mode = data.get("mode", "dedicated")
+        sat_class = data.get("sat_class", "cubesat")
         if mode == "rideshare":
-            solar_power = float(data.get("solar_power", DEFAULT_SOLAR_POWER_W))
+            if sat_class == "multimw":
+                power_mw = float(data.get("multimw_power", 1))
+                solar_power = power_mw * 1_000_000
+            else:
+                solar_power = float(data.get("solar_power", DEFAULT_SOLAR_POWER_W))
             solar_cost = float(data.get("solar_cost", DEFAULT_SOLAR_COST_PER_W))
             asic_count = int(solar_power / power_per_asic) if power_per_asic else 0
             total_cost = solar_power * solar_cost
@@ -268,7 +272,6 @@ def api_estimate_cost():
             }
             return jsonify({"total_cost": total_cost, "breakdown": breakdown})
 
-        sat_class = data.get("sat_class", "cubesat")
         if sat_class == "multimw":
             power_mw = float(data.get("multimw_power", 1))
             params, costs = build_multimw_params(power_mw)
@@ -442,7 +445,11 @@ def api_simulate():
         mission_life = float(data.get("mission_life", 5))
         mode = data.get("mode", "dedicated")
         if mode == "rideshare":
-            solar_power = float(data.get("solar_power", DEFAULT_SOLAR_POWER_W))
+            if sat_class == "multimw":
+                power_mw = float(data.get("multimw_power", 1))
+                solar_power = power_mw * 1_000_000
+            else:
+                solar_power = float(data.get("solar_power", DEFAULT_SOLAR_POWER_W))
             solar_cost = float(data.get("solar_cost", DEFAULT_SOLAR_COST_PER_W))
             asic_power_pct = float(data.get("asic_power_pct", 100))
             asic_count = int(solar_power / power_per_asic) if power_per_asic else 0

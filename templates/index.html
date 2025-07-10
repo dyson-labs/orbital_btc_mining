@@ -60,8 +60,10 @@
         <input type="range" id="efficiency" name="efficiency" min="14" max="{{ default_efficiency + 5 }}" value="{{ default_efficiency }}" step="0.1" oninput="document.getElementById('efficiency_val').innerText=this.value; updateCost();">
         <br>
         <div id="rideshare_opts" style="display:none; margin-bottom:10px;">
-            <span class="slider-label">Solar Panel Power (W): <span id="solar_power_val">{{ default_solar_power }}</span></span>
-            <input type="range" id="solar_power" name="solar_power" min="40" max="30000" value="{{ default_solar_power }}" step="10" oninput="document.getElementById('solar_power_val').innerText=this.value; updateCost();">
+            <div id="solar_power_wrap">
+                <span class="slider-label">Solar Panel Power (W): <span id="solar_power_val">{{ default_solar_power }}</span></span>
+                <input type="range" id="solar_power" name="solar_power" min="40" max="30000" value="{{ default_solar_power }}" step="10" oninput="document.getElementById('solar_power_val').innerText=this.value; updateCost();">
+            </div>
             <span class="slider-label">Solar Cost ($/W): <span id="solar_cost_val">{{ default_solar_cost }}</span></span>
             <input type="range" id="solar_cost" name="solar_cost" min="0.0005" max="75" value="{{ default_solar_cost }}" step="0.01" oninput="document.getElementById('solar_cost_val').innerText=this.value; updateCost();">
             <span class="slider-label">ASIC Power Allocation (%): <span id="asic_power_pct_val">100</span>%</span>
@@ -180,6 +182,13 @@
             const m = document.getElementById('mode').value;
             const r = document.getElementById('rideshare_opts');
             r.style.display = m === 'rideshare' ? 'block' : 'none';
+            const solarWrap = document.getElementById('solar_power_wrap');
+            const cls = document.getElementById('sat_class').value;
+            if (m === 'rideshare' && cls === 'multimw') {
+                solarWrap.style.display = 'none';
+            } else {
+                solarWrap.style.display = m === 'rideshare' ? 'block' : 'none';
+            }
             const d = document.getElementById('ded_power_opts');
             const dc = document.getElementById('ded_cost_opts');
             if (m === 'dedicated') {
@@ -200,6 +209,7 @@
             opts.style.display = cls === 'multimw' ? 'block' : 'none';
             const d = document.getElementById('ded_power_opts');
             const dc = document.getElementById('ded_cost_opts');
+            const solarWrap = document.getElementById('solar_power_wrap');
             const mode = document.getElementById('mode').value;
             if (mode === 'dedicated' && (cls === 'cubesat' || cls === 'espa')) {
                 d.style.display = 'block';
@@ -215,6 +225,11 @@
                 dc.style.display = 'block';
             } else {
                 dc.style.display = 'none';
+            }
+            if (mode === 'rideshare' && cls === 'multimw') {
+                solarWrap.style.display = 'none';
+            } else if (mode === 'rideshare') {
+                solarWrap.style.display = 'block';
             }
             updateCost();
         }
@@ -242,7 +257,9 @@
                 data.multimw_power = document.getElementById('multimw_power').value;
             }
             if (data.mode === 'rideshare') {
-                data.solar_power = document.getElementById('solar_power').value;
+                if (data.sat_class !== 'multimw') {
+                    data.solar_power = document.getElementById('solar_power').value;
+                }
                 data.solar_cost = document.getElementById('solar_cost').value;
                 data.asic_power_pct = document.getElementById('asic_power_pct').value;
             } else if (data.mode === 'dedicated') {
@@ -305,7 +322,9 @@
                 data.multimw_power = document.getElementById('multimw_power').value;
             }
             if (data.mode === 'rideshare') {
-                data.solar_power = document.getElementById('solar_power').value;
+                if (data.sat_class !== 'multimw') {
+                    data.solar_power = document.getElementById('solar_power').value;
+                }
                 data.solar_cost = document.getElementById('solar_cost').value;
                 data.asic_power_pct = document.getElementById('asic_power_pct').value;
             } else if (data.mode === 'dedicated') {
