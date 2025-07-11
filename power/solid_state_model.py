@@ -3,7 +3,11 @@
 from dataclasses import dataclass
 from typing import Iterable, Tuple
 import logging
+import io
 import numpy as np
+import matplotlib
+
+matplotlib.use("Agg")
 
 logger = logging.getLogger(__name__)
 
@@ -168,3 +172,27 @@ def simulate(
         state.btc_cumulative,
     )
     return x1_hist, x2_hist, x3_hist
+
+
+def outputs_plot_to_buffer(y1: Iterable[float], y2: Iterable[float], y3: Iterable[float], dt: float) -> io.BytesIO:
+    """Return PNG buffer plotting outputs vs time."""
+
+    t_hours = np.arange(len(y1)) * dt / 3600.0
+
+    fig, axes = plt.subplots(3, 1, figsize=(6, 8), sharex=True)
+    axes[0].plot(t_hours, y1)
+    axes[0].set_ylabel("Battery (Wh)")
+    axes[1].plot(t_hours, y2)
+    axes[1].set_ylabel("BTC/s")
+    axes[2].plot(t_hours, y3)
+    axes[2].set_ylabel("ASIC Temp (K)")
+    axes[2].set_xlabel("Time (hr)")
+    for ax in axes:
+        ax.grid(True)
+    plt.tight_layout()
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png")
+    plt.close(fig)
+    buf.seek(0)
+    return buf

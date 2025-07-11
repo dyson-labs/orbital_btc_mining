@@ -593,7 +593,12 @@ if __name__ == "__main__":
     logger = logging.getLogger(__name__)
     # --- quick demo run of the solid state power model ---
     try:
-        from power.solid_state_model import ModelState, ModelParams, simulate
+        from power.solid_state_model import (
+            ModelState,
+            ModelParams,
+            simulate,
+            outputs_plot_to_buffer,
+        )
 
         demo_params = ModelParams()
         demo_state = ModelState(0.0, 300.0, 0.0)
@@ -615,6 +620,10 @@ if __name__ == "__main__":
             x2[-1],
             x3[-1],
         )
+        buf = outputs_plot_to_buffer(y1, y2, y3, dt=60.0)
+        with open("solid_state_outputs.png", "wb") as f:
+            f.write(buf.getvalue())
+        logger.info("Saved demo output plot to solid_state_outputs.png")
     except Exception as exc:  # pragma: no cover - demo should not crash server
         logger.exception("Solid state model demo failed: %s", exc)
 
