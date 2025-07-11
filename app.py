@@ -13,7 +13,12 @@ import os
 import pandas as pd
 from astropy import units as u
 from analysis.orbit_plot import plot_orbit_to_buffer
-from analysis.roi_plot import project_revenue_curve, roi_plot_to_buffer
+from analysis.roi_plot import (
+    project_revenue_curve,
+    roi_plot_to_buffer,
+    project_btc_curve,
+    btc_plot_to_buffer,
+)
 
 # === MAIN/UTILS (core orchestrator) ===
 
@@ -520,6 +525,17 @@ def api_simulate():
                 block_reward_btc=capex.get("block_reward_btc", 3.125),
             )
         roi_buf = roi_plot_to_buffer(cost_data["total_cost"], revenue_curve, step=0.25)
+        btc_curve = project_btc_curve(
+            env.sunlight_fraction if mode != "rideshare" else effective_fraction,
+            mission_life,
+            asic_count if mode == "rideshare" else (asic_override if asic_override is not None else params["asic_count"]),
+            step=0.25,
+            hashrate_per_asic=capex.get("hashrate_per_asic", DEFAULT_HASHRATE_PER_ASIC),
+            network_hashrate_ehs=capex.get("network_hashrate_ehs", 700.0),
+            network_hashrate_growth=btc_hash,
+            block_reward_btc=capex.get("block_reward_btc", 3.125),
+        )
+        btc_buf = btc_plot_to_buffer(btc_curve, step=0.25)
 
         rad_model = RadiationModel()
         rad_info = rad_model.estimate_tid(
@@ -576,6 +592,7 @@ def api_simulate():
                 base64.b64encode(rf_buf.getvalue()).decode("utf-8") if rf_buf else None
             ),
             "roi_plot": base64.b64encode(roi_buf.getvalue()).decode("utf-8"),
+            "btc_plot": base64.b64encode(btc_buf.getvalue()).decode("utf-8"),
         }
         return jsonify(result)
     except Exception as e:

@@ -34,6 +34,32 @@ def project_revenue_curve(
     return revenue
 
 
+def project_btc_curve(
+    solar_fraction,
+    mission_lifetime,
+    asic_count,
+    step=0.25,
+    hashrate_per_asic=0.63,
+    network_hashrate_ehs=700.0,
+    network_hashrate_growth=0.25,
+    block_reward_btc=3.125,
+    blocks_per_day=144,
+):
+    """Return list of BTC mined each period."""
+
+    btc = []
+    total_hashrate = asic_count * hashrate_per_asic
+    steps = int(mission_lifetime / step)
+    for i in range(steps):
+        t = (i + 1) * step
+        net_hash = network_hashrate_ehs * ((1 + network_hashrate_growth) ** t)
+        share = total_hashrate / (net_hash * 1_000_000)
+        btc_day = share * blocks_per_day * block_reward_btc * solar_fraction
+        btc_period = btc_day * 365 * step
+        btc.append(btc_period)
+    return btc
+
+
 def roi_plot_to_buffer(total_cost, revenue_curve, step=0.25):
     """Generate ROI chart and return PNG buffer."""
     years = np.arange(step, step * len(revenue_curve) + 0.0001, step)
@@ -58,6 +84,27 @@ def roi_plot_to_buffer(total_cost, revenue_curve, step=0.25):
     ax.yaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(fmt))
     ax.set_title("ROI Projection")
     ax.legend()
+    plt.tight_layout()
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png")
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
+def btc_plot_to_buffer(btc_curve, step=0.25):
+    """Generate cumulative BTC plot and return PNG buffer."""
+
+    years = np.arange(step, step * len(btc_curve) + 0.0001, step)
+    cumulative = np.cumsum(btc_curve)
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.plot(years, cumulative, label="BTC Mined")
+    ax.set_xlabel("Years")
+    ax.set_ylabel("BTC")
+    ax.set_title("Cumulative BTC Mined")
+    ax.grid(True)
     plt.tight_layout()
 
     buf = io.BytesIO()
