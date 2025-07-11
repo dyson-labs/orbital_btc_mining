@@ -2,7 +2,10 @@
 
 from dataclasses import dataclass
 from typing import Iterable, Tuple
+import logging
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -121,6 +124,8 @@ def simulate(
     u3 = np.asarray(list(u3), dtype=float)
     n = len(u1)
 
+    logger.info("Simulating %d steps with dt=%s", n, dt)
+
     x1_hist = np.empty(n)
     x2_hist = np.empty(n)
     x3_hist = np.empty(n)
@@ -135,6 +140,13 @@ def simulate(
         x1_hist[i] = state.battery_Wh
         x2_hist[i] = state.asic_temp_K
         x3_hist[i] = state.btc_cumulative
+        logger.debug(
+            "step %d: battery=%.2f Wh, temp=%.2f K, btc=%.6f",
+            i,
+            state.battery_Wh,
+            state.asic_temp_K,
+            state.btc_cumulative,
+        )
         if return_outputs:
             out = calc_outputs(state, u3[i], params)
             y1_hist[i] = out.battery_Wh
@@ -142,5 +154,17 @@ def simulate(
             y3_hist[i] = out.asic_temp_K
 
     if return_outputs:
+        logger.info(
+            "Simulation done: final battery=%.2f Wh, temp=%.2f K, btc=%.6f",
+            state.battery_Wh,
+            state.asic_temp_K,
+            state.btc_cumulative,
+        )
         return x1_hist, x2_hist, x3_hist, y1_hist, y2_hist, y3_hist
+    logger.info(
+        "Simulation done: final battery=%.2f Wh, temp=%.2f K, btc=%.6f",
+        state.battery_Wh,
+        state.asic_temp_K,
+        state.btc_cumulative,
+    )
     return x1_hist, x2_hist, x3_hist
