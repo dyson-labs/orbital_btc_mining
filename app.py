@@ -2,6 +2,7 @@
 
 from flask import Flask, render_template, request, jsonify, send_file
 import matplotlib
+import logging
 
 matplotlib.use("Agg")
 
@@ -588,5 +589,34 @@ def health():
 import os
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+    # --- quick demo run of the solid state power model ---
+    try:
+        from power.solid_state_model import ModelState, ModelParams, simulate
+
+        demo_params = ModelParams()
+        demo_state = ModelState(0.0, 300.0, 0.0)
+        u1 = [100.0] * 10
+        u2 = [10.0] * 10
+        u3 = [1.0] * 10
+        x1, x2, x3, y1, y2, y3 = simulate(
+            u1,
+            u2,
+            u3,
+            dt=60.0,
+            initial_state=demo_state,
+            params=demo_params,
+            return_outputs=True,
+        )
+        logger.info(
+            "Solid state model demo -> final battery %.2f Wh, temp %.2f K, BTC %.6f",
+            x1[-1],
+            x2[-1],
+            x3[-1],
+        )
+    except Exception as exc:  # pragma: no cover - demo should not crash server
+        logger.exception("Solid state model demo failed: %s", exc)
+
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
 
