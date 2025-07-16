@@ -4,6 +4,10 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from plot_utils import DEFAULT_FIGSIZE
 
 
 def project_revenue_curve(
@@ -65,7 +69,7 @@ def roi_plot_to_buffer(total_cost, revenue_curve, step=0.25):
     years = np.arange(step, step * len(revenue_curve) + 0.0001, step)
     cumulative = np.cumsum(revenue_curve)
 
-    fig, ax = plt.subplots(figsize=(6, 4))
+    fig, ax = plt.subplots(figsize=DEFAULT_FIGSIZE)
     ax.plot(years, cumulative, label="Cumulative Revenue")
     ax.axhline(total_cost, color="r", linestyle="--", label="Total Cost")
     ax.set_xlabel("Years")
@@ -99,7 +103,7 @@ def btc_plot_to_buffer(btc_curve, step=0.25):
     years = np.arange(step, step * len(btc_curve) + 0.0001, step)
     cumulative = np.cumsum(btc_curve)
 
-    fig, ax = plt.subplots(figsize=(6, 4))
+    fig, ax = plt.subplots(figsize=DEFAULT_FIGSIZE)
     ax.plot(years, cumulative, label="BTC Mined")
     ax.set_xlabel("Years")
     ax.set_ylabel("BTC")
