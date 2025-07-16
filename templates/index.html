@@ -9,6 +9,8 @@
         .slider-value { display: inline-block; min-width: 40px; }
         #visuals, #textual { display: flex; flex-wrap: wrap; gap: 10px; }
         #visuals img { max-width: 320px; }
+        /* 2-D thermal image same size as orbit plot */
+        #thermal2d_img { max-width: 320px; }
         #textual pre { background:#f5f5f5; padding:10px; margin:0; width:320px; }
     </style>
 </head>
@@ -108,6 +110,9 @@
     <div id="visuals" style="margin-top: 1em;">
         <img id="orbit_img" alt="Orbit plot" style="display:none;" />
         <img id="thermal_img" alt="Thermal plot" style="display:none;" />
+        <div style="flex-basis:100%; text-align:center;">
+            <img id="thermal2d_img" alt="2-D Thermal" style="display:none;" />
+        </div>
         <img id="rf_plot_img" alt="RF Margin" style="display:none;" />
         <img id="roi_img" alt="ROI plot" style="display:none;" />
         <img id="btc_img" alt="BTC plot" style="display:none;" />
@@ -119,6 +124,9 @@
         <pre id="rad_summary"></pre>
     </div>
     <script>
+        let thermal2dFrames = [];
+        let thermal2dTimer = null;
+        let thermal2dIndex = 0;
         function formatValue(v) {
             if (typeof v === 'number') return v.toLocaleString();
             if (typeof v === 'string') {
@@ -238,9 +246,20 @@
         function clearVisuals() {
             document.getElementById('orbit_img').style.display = 'none';
             document.getElementById('thermal_img').style.display = 'none';
+            document.getElementById('thermal2d_img').style.display = 'none';
+            if (thermal2dTimer) {
+                clearInterval(thermal2dTimer);
+                thermal2dTimer = null;
+            }
+            thermal2dFrames = [];
             document.getElementById('rf_plot_img').style.display = 'none';
             document.getElementById('roi_img').style.display = 'none';
             document.getElementById('btc_img').style.display = 'none';
+            thermal2dFrames = [];
+            if (thermal2dTimer) {
+                clearInterval(thermal2dTimer);
+                thermal2dTimer = null;
+            }
         }
 
         function updateOrbit() {
@@ -302,6 +321,7 @@
             document.getElementById('results').innerText = '';
             document.getElementById('orbit_img').style.display = 'none';
             document.getElementById('thermal_img').style.display = 'none';
+            document.getElementById('thermal2d_img').style.display = 'none';
             document.getElementById('rf_plot_img').style.display = 'none';
             document.getElementById('roi_img').style.display = 'none';
             document.getElementById('rf_summary').innerText = '';
@@ -357,6 +377,17 @@
                 if (res.thermal_plot) {
                     document.getElementById('thermal_img').src = 'data:image/png;base64,' + res.thermal_plot;
                     document.getElementById('thermal_img').style.display = 'block';
+                }
+                if (res.thermal2d_frames && res.thermal2d_frames.length) {
+                    thermal2dFrames = res.thermal2d_frames;
+                    thermal2dIndex = 0;
+                    document.getElementById('thermal2d_img').src = 'data:image/png;base64,' + thermal2dFrames[0];
+                    document.getElementById('thermal2d_img').style.display = 'block';
+                    if (thermal2dTimer) clearInterval(thermal2dTimer);
+                    thermal2dTimer = setInterval(() => {
+                        thermal2dIndex = (thermal2dIndex + 1) % thermal2dFrames.length;
+                        document.getElementById('thermal2d_img').src = 'data:image/png;base64,' + thermal2dFrames[thermal2dIndex];
+                    }, 1000);
                 }
                 if (res.rf_plot) {
                     document.getElementById('rf_plot_img').src = 'data:image/png;base64,' + res.rf_plot;
