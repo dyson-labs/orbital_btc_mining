@@ -3,6 +3,10 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from plot_utils import DEFAULT_FIGSIZE
 import io
 
 VERBOSE = True  # Set to True to enable detailed output
@@ -172,7 +176,7 @@ def run_thermal_eclipse_model(
     if plot3d:
         time_array = times / 3600.0
         X, Y = np.meshgrid(x, time_array)
-        fig = plt.figure(figsize=(8, 5))
+        fig = plt.figure(figsize=DEFAULT_FIGSIZE)
         ax = fig.add_subplot(111, projection="3d")
         surf = ax.plot_surface(
             X, Y, T_hist, cmap="viridis", linewidth=0, antialiased=True

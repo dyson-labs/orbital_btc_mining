@@ -9,6 +9,10 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from plot_utils import DEFAULT_FIGSIZE
 
 logger = logging.getLogger(__name__)
 
@@ -180,7 +184,7 @@ def outputs_plot_to_buffer(y1: Iterable[float], y2: Iterable[float], y3: Iterabl
 
     t_hours = np.arange(len(y1)) * dt / 3600.0
 
-    fig, axes = plt.subplots(3, 1, figsize=(6, 8), sharex=True)
+    fig, axes = plt.subplots(3, 1, figsize=DEFAULT_FIGSIZE, sharex=True)
     axes[0].plot(t_hours, y1)
     axes[0].set_ylabel("Battery (Wh)")
     axes[1].plot(t_hours, y2)

@@ -4,6 +4,10 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from plot_utils import DEFAULT_FIGSIZE
 from astropy import units as u
 
 from orbits.eclipse import OrbitEnvironment
@@ -19,7 +23,7 @@ def plot_orbit_to_buffer(env: OrbitEnvironment, n_points: int = 200):
         positions.append(orb.r.to(u.km).value)
     positions = np.array(positions)
 
-    fig = plt.figure(figsize=(6, 6))
+    fig = plt.figure(figsize=DEFAULT_FIGSIZE)
     ax = fig.add_subplot(111, projection="3d")
     ax.plot(positions[:, 0], positions[:, 1], positions[:, 2], label="Orbit")
 
