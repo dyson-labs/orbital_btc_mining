@@ -2,6 +2,7 @@
 
 from flask import Flask, render_template, request, jsonify, send_file
 import matplotlib
+import logging
 
 matplotlib.use("Agg")
 
@@ -12,7 +13,12 @@ import os
 import pandas as pd
 from astropy import units as u
 from analysis.orbit_plot import plot_orbit_to_buffer
-from analysis.roi_plot import project_revenue_curve, roi_plot_to_buffer
+from analysis.roi_plot import (
+    project_revenue_curve,
+    roi_plot_to_buffer,
+    project_btc_curve,
+    btc_plot_to_buffer,
+)
 
 # === MAIN/UTILS (core orchestrator) ===
 
@@ -404,6 +410,17 @@ def api_simulate():
                 rf = {}
                 rf_buf = None
 
+        # Determine how much of the mission communications are available
+        if comms_mode == "relay":
+            comms_fraction = 1.0
+        else:
+            try:
+                dn_pct = float(str(rf.get("Downlink % of mission", "0")).strip("%"))
+                up_pct = float(str(rf.get("Uplink % of mission", "0")).strip("%"))
+                comms_fraction = min(dn_pct, up_pct) / 100.0
+            except Exception:
+                comms_fraction = 0.0
+
         orbit_buf = plot_orbit_to_buffer(env)
 
         # --- Power and Cost Models ---
@@ -453,7 +470,9 @@ def api_simulate():
             solar_cost = float(data.get("solar_cost", DEFAULT_SOLAR_COST_PER_W))
             asic_power_pct = float(data.get("asic_power_pct", 100))
             asic_count = int(solar_power / power_per_asic) if power_per_asic else 0
-            effective_fraction = env.sunlight_fraction * (asic_power_pct / 100.0)
+            effective_fraction = (
+                env.sunlight_fraction * (asic_power_pct / 100.0) * comms_fraction
+            )
             capex = {
                 "bus_cost": 0,
                 "payload_cost": solar_power * solar_cost,
@@ -491,7 +510,7 @@ def api_simulate():
                 "network_hashrate_growth": btc_hash,
                 "mission_lifetime": mission_life,
             }
-            cost_data = run_cost_model(env.sunlight_fraction, **capex)
+            cost_data = run_cost_model(env.sunlight_fraction * comms_fraction, **capex)
             cost_data["launch_cost_per_kg"] = cost_per_kg
 
         if mode == "rideshare":
@@ -508,7 +527,7 @@ def api_simulate():
             )
         else:
             revenue_curve = project_revenue_curve(
-                env.sunlight_fraction,
+                env.sunlight_fraction * comms_fraction,
                 mission_life,
                 (asic_override if asic_override is not None else params["asic_count"]),
                 hashrate_per_asic=capex.get("hashrate_per_asic", DEFAULT_HASHRATE_PER_ASIC),
@@ -519,6 +538,17 @@ def api_simulate():
                 block_reward_btc=capex.get("block_reward_btc", 3.125),
             )
         roi_buf = roi_plot_to_buffer(cost_data["total_cost"], revenue_curve, step=0.25)
+        btc_curve = project_btc_curve(
+            (env.sunlight_fraction * comms_fraction) if mode != "rideshare" else effective_fraction,
+            mission_life,
+            asic_count if mode == "rideshare" else (asic_override if asic_override is not None else params["asic_count"]),
+            step=0.25,
+            hashrate_per_asic=capex.get("hashrate_per_asic", DEFAULT_HASHRATE_PER_ASIC),
+            network_hashrate_ehs=capex.get("network_hashrate_ehs", 700.0),
+            network_hashrate_growth=btc_hash,
+            block_reward_btc=capex.get("block_reward_btc", 3.125),
+        )
+        btc_buf = btc_plot_to_buffer(btc_curve, step=0.25)
 
         rad_model = RadiationModel()
         rad_info = rad_model.estimate_tid(
@@ -575,6 +605,7 @@ def api_simulate():
                 base64.b64encode(rf_buf.getvalue()).decode("utf-8") if rf_buf else None
             ),
             "roi_plot": base64.b64encode(roi_buf.getvalue()).decode("utf-8"),
+            "btc_plot": base64.b64encode(btc_buf.getvalue()).decode("utf-8"),
         }
         return jsonify(result)
     except Exception as e:
@@ -588,5 +619,43 @@ def health():
 import os
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    logger = logging.getLogger(__name__)
+    # --- quick demo run of the solid state power model ---
+    try:
+        from power.solid_state_model import (
+            ModelState,
+            ModelParams,
+            simulate,
+            outputs_plot_to_buffer,
+        )
+
+        demo_params = ModelParams()
+        demo_state = ModelState(0.0, 300.0, 0.0)
+        u1 = [100.0] * 10
+        u2 = [10.0] * 10
+        u3 = [1.0] * 10
+        x1, x2, x3, y1, y2, y3 = simulate(
+            u1,
+            u2,
+            u3,
+            dt=60.0,
+            initial_state=demo_state,
+            params=demo_params,
+            return_outputs=True,
+        )
+        logger.info(
+            "Solid state model demo -> final battery %.2f Wh, temp %.2f K, BTC %.6f",
+            x1[-1],
+            x2[-1],
+            x3[-1],
+        )
+        buf = outputs_plot_to_buffer(y1, y2, y3, dt=60.0)
+        with open("solid_state_outputs.png", "wb") as f:
+            f.write(buf.getvalue())
+        logger.info("Saved demo output plot to solid_state_outputs.png")
+    except Exception as exc:  # pragma: no cover - demo should not crash server
+        logger.exception("Solid state model demo failed: %s", exc)
+
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
 

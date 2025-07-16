@@ -110,6 +110,7 @@
         <img id="thermal_img" alt="Thermal plot" style="display:none;" />
         <img id="rf_plot_img" alt="RF Margin" style="display:none;" />
         <img id="roi_img" alt="ROI plot" style="display:none;" />
+        <img id="btc_img" alt="BTC plot" style="display:none;" />
     </div>
     <div id="textual" style="margin-top:1em;">
         <pre id="rf_summary"></pre>
@@ -239,6 +240,7 @@
             document.getElementById('thermal_img').style.display = 'none';
             document.getElementById('rf_plot_img').style.display = 'none';
             document.getElementById('roi_img').style.display = 'none';
+            document.getElementById('btc_img').style.display = 'none';
         }
 
         function updateOrbit() {
@@ -363,6 +365,10 @@
                 if (res.roi_plot) {
                     document.getElementById('roi_img').src = 'data:image/png;base64,' + res.roi_plot;
                     document.getElementById('roi_img').style.display = 'block';
+                }
+                if (res.btc_plot) {
+                    document.getElementById('btc_img').src = 'data:image/png;base64,' + res.btc_plot;
+                    document.getElementById('btc_img').style.display = 'block';
                 }
                 document.getElementById('rf_summary').innerText = formatObject(res.rf_summary);
                 document.getElementById('cost_breakdown').innerHTML = formatCostHTML(res.cost_summary, 2);
