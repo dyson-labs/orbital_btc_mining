@@ -5,6 +5,10 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from plot_utils import DEFAULT_FIGSIZE
 
 # =====================================================================
 # Editable parameters
@@ -139,7 +143,12 @@ def run_simulation(view_factor=VIEW_FACTOR_BOTTOM, area_factor=AREA_FACTOR_BOTTO
 
 def plot_temperature(x, y, temps):
     extent = [x[0], x[-1], y[0], y[-1]]
-    fig, axes = plt.subplots(1, len(temps), figsize=(4 * len(temps), 3), sharey=True)
+    fig, axes = plt.subplots(
+        1,
+        len(temps),
+        figsize=(DEFAULT_FIGSIZE[0] * len(temps), DEFAULT_FIGSIZE[1]),
+        sharey=True,
+    )
     if len(temps) == 1:
         axes = [axes]
     for ax, data in zip(axes, temps):
