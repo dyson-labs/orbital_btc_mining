@@ -7,6 +7,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import os
 import sys
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from plot_utils import DEFAULT_FIGSIZE
 
@@ -86,11 +87,11 @@ def build_material_grid():
             cp[j, i] = MATERIALS["asic"]["cp"]
             Q[j, i] = q_asic
     asic_slice = (slice(j_start, j_end), slice(i_start, i_end))
-    return x, y, k, rho, cp, Q, asic_slice
+    return x, y, k, rho, cp, Q, asic_slice, boundaries
 
 
 def run_simulation(view_factor=VIEW_FACTOR_BOTTOM, area_factor=AREA_FACTOR_BOTTOM):
-    x, y, k, rho, cp, Q, asic_slice = build_material_grid()
+    x, y, k, rho, cp, Q, asic_slice, boundaries = build_material_grid()
     dx = DX_MM / 1000.0
     dy = DY_MM / 1000.0
     nx = len(x)
@@ -138,10 +139,12 @@ def run_simulation(view_factor=VIEW_FACTOR_BOTTOM, area_factor=AREA_FACTOR_BOTTO
         "max_asic_K": float(np.max(asic_temps)),
         "avg_asic_K": float(np.mean(asic_temps)),
     }
-    return x, y, snapshots, T, stats
+    return x, y, snapshots, T, stats, boundaries
 
 
-def plot_temperature(x, y, temps):
+def plot_temperature(x, y, temps, layer_boundaries_mm):
+    """Plot one or more temperature snapshots with layer boundaries."""
+
     extent = [x[0], x[-1], y[0], y[-1]]
     fig, axes = plt.subplots(
         1,
@@ -151,6 +154,7 @@ def plot_temperature(x, y, temps):
     )
     if len(temps) == 1:
         axes = [axes]
+
     for ax, data in zip(axes, temps):
         im = ax.imshow(
             data,
@@ -162,11 +166,16 @@ def plot_temperature(x, y, temps):
         fig.colorbar(im, ax=ax, shrink=0.8, label="Temperature (K)")
         ax.set_xlabel("x (mm)")
         ax.set_ylabel("y (mm)")
+
+        # Mark boundaries between layers
+        for boundary in layer_boundaries_mm:
+            ax.axhline(y=boundary, color="cyan", linestyle="--", linewidth=0.7)
+
     fig.tight_layout()
     return fig
 
 
-def single_temp_plot_to_buffer(x, y, temp, vmin=None, vmax=None):
+def single_temp_plot_to_buffer(x, y, temp, vmin=None, vmax=None, layer_boundaries_mm=None):
     """Return a PNG buffer for one temperature snapshot."""
     extent = [x[0], x[-1], y[0], y[-1]]
     fig, ax = plt.subplots(figsize=DEFAULT_FIGSIZE)
@@ -182,6 +191,9 @@ def single_temp_plot_to_buffer(x, y, temp, vmin=None, vmax=None):
     fig.colorbar(im, ax=ax, shrink=0.8, label="Temperature (K)")
     ax.set_xlabel("x (mm)")
     ax.set_ylabel("y (mm)")
+    if layer_boundaries_mm is not None:
+        for boundary in layer_boundaries_mm:
+            ax.axhline(y=boundary, color="cyan", linestyle="--", linewidth=0.7)
     fig.tight_layout()
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=200)
@@ -190,21 +202,23 @@ def single_temp_plot_to_buffer(x, y, temp, vmin=None, vmax=None):
     return buf
 
 
-def temperature_frames_base64(x, y, temps):
+def temperature_frames_base64(x, y, temps, layer_boundaries_mm=None):
     """Return a list of base64 PNGs for each snapshot."""
     vmin = float(np.min(temps[0]))
     vmax = float(np.max(temps[-1]))
     frames = []
     for t in temps:
-        buf = single_temp_plot_to_buffer(x, y, t, vmin=vmin, vmax=vmax)
+        buf = single_temp_plot_to_buffer(
+            x, y, t, vmin=vmin, vmax=vmax, layer_boundaries_mm=layer_boundaries_mm
+        )
         frames.append(base64.b64encode(buf.getvalue()).decode("utf-8"))
     return frames
 
 
-def temperature_plot_to_buffer(x, y, temps):
+def temperature_plot_to_buffer(x, y, temps, layer_boundaries_mm=None):
     """Return a PNG buffer with the temperature plot."""
 
-    fig = plot_temperature(x, y, temps)
+    fig = plot_temperature(x, y, temps, layer_boundaries_mm)
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=200)
     plt.close(fig)
@@ -212,19 +226,19 @@ def temperature_plot_to_buffer(x, y, temps):
     return buf
 
 
-def temperature_plot_base64(x, y, temps):
+def temperature_plot_base64(x, y, temps, layer_boundaries_mm=None):
     """Return a base64-encoded PNG of the temperature plot."""
 
-    buf = temperature_plot_to_buffer(x, y, temps)
+    buf = temperature_plot_to_buffer(x, y, temps, layer_boundaries_mm)
     return base64.b64encode(buf.getvalue()).decode("utf-8")
 
 
 if __name__ == "__main__":
-    x, y, snaps, final_T, stats = run_simulation()
-    buf = temperature_plot_to_buffer(x, y, snaps + [final_T])
-    with open("2dthermal_result.png", "wb") as f:
-        f.write(buf.getvalue())
-    frames = temperature_frames_base64(x, y, snaps + [final_T])
+    x, y, snaps, final_T, stats, boundaries = run_simulation()
+    fig = plot_temperature(x, y, snaps + [final_T], layer_boundaries_mm=boundaries)
+    fig.savefig("2dthermal_result.png", dpi=200)
+    plt.close(fig)
+    frames = temperature_frames_base64(x, y, snaps + [final_T], layer_boundaries_mm=boundaries)
     for i, b64 in enumerate(frames):
         with open(f"2dthermal_frame_{i}.png", "wb") as f:
             f.write(base64.b64decode(b64))
