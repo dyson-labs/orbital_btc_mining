@@ -410,6 +410,17 @@ def api_simulate():
                 rf = {}
                 rf_buf = None
 
+        # Determine how much of the mission communications are available
+        if comms_mode == "relay":
+            comms_fraction = 1.0
+        else:
+            try:
+                dn_pct = float(str(rf.get("Downlink % of mission", "0")).strip("%"))
+                up_pct = float(str(rf.get("Uplink % of mission", "0")).strip("%"))
+                comms_fraction = min(dn_pct, up_pct) / 100.0
+            except Exception:
+                comms_fraction = 0.0
+
         orbit_buf = plot_orbit_to_buffer(env)
 
         # --- Power and Cost Models ---
@@ -459,7 +470,9 @@ def api_simulate():
             solar_cost = float(data.get("solar_cost", DEFAULT_SOLAR_COST_PER_W))
             asic_power_pct = float(data.get("asic_power_pct", 100))
             asic_count = int(solar_power / power_per_asic) if power_per_asic else 0
-            effective_fraction = env.sunlight_fraction * (asic_power_pct / 100.0)
+            effective_fraction = (
+                env.sunlight_fraction * (asic_power_pct / 100.0) * comms_fraction
+            )
             capex = {
                 "bus_cost": 0,
                 "payload_cost": solar_power * solar_cost,
@@ -497,7 +510,7 @@ def api_simulate():
                 "network_hashrate_growth": btc_hash,
                 "mission_lifetime": mission_life,
             }
-            cost_data = run_cost_model(env.sunlight_fraction, **capex)
+            cost_data = run_cost_model(env.sunlight_fraction * comms_fraction, **capex)
             cost_data["launch_cost_per_kg"] = cost_per_kg
 
         if mode == "rideshare":
@@ -514,7 +527,7 @@ def api_simulate():
             )
         else:
             revenue_curve = project_revenue_curve(
-                env.sunlight_fraction,
+                env.sunlight_fraction * comms_fraction,
                 mission_life,
                 (asic_override if asic_override is not None else params["asic_count"]),
                 hashrate_per_asic=capex.get("hashrate_per_asic", DEFAULT_HASHRATE_PER_ASIC),
@@ -526,7 +539,7 @@ def api_simulate():
             )
         roi_buf = roi_plot_to_buffer(cost_data["total_cost"], revenue_curve, step=0.25)
         btc_curve = project_btc_curve(
-            env.sunlight_fraction if mode != "rideshare" else effective_fraction,
+            (env.sunlight_fraction * comms_fraction) if mode != "rideshare" else effective_fraction,
             mission_life,
             asic_count if mode == "rideshare" else (asic_override if asic_override is not None else params["asic_count"]),
             step=0.25,
