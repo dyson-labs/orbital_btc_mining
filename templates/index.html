@@ -9,6 +9,8 @@
         .slider-value { display: inline-block; min-width: 40px; }
         #visuals, #textual { display: flex; flex-wrap: wrap; gap: 10px; }
         #visuals img { max-width: 320px; }
+        /* show the 2-D thermal image larger so details are readable */
+        #thermal2d_img { max-width: 640px; width: 100%; }
         #textual pre { background:#f5f5f5; padding:10px; margin:0; width:320px; }
     </style>
 </head>
@@ -108,7 +110,9 @@
     <div id="visuals" style="margin-top: 1em;">
         <img id="orbit_img" alt="Orbit plot" style="display:none;" />
         <img id="thermal_img" alt="Thermal plot" style="display:none;" />
-        <img id="thermal2d_img" alt="2-D Thermal" style="display:none;" />
+        <div style="flex-basis:100%; text-align:center;">
+            <img id="thermal2d_img" alt="2-D Thermal" style="display:none;" />
+        </div>
         <img id="rf_plot_img" alt="RF Margin" style="display:none;" />
         <img id="roi_img" alt="ROI plot" style="display:none;" />
         <img id="btc_img" alt="BTC plot" style="display:none;" />
