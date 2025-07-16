@@ -34,6 +34,17 @@ from launch.launch_model import LaunchModel
 # === RADIATION FOLDER ===
 from radiation.tid_model import RadiationModel
 from radiation.Thermal import run_thermal_eclipse_model
+
+# 2-D thermal model is stored in a file that starts with a digit which makes it
+# awkward to import normally. We load it dynamically so we can reuse the helper
+# functions defined inside.
+import importlib.util
+
+_spec = importlib.util.spec_from_file_location(
+    "thermal2d", os.path.join(os.path.dirname(__file__), "radiation", "2dthermal.py")
+)
+_thermal2d = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_thermal2d)  # type: ignore
 from radiation.rf_model import (
     full_rf_visibility_simulation,
     ground_stations_by_network,
@@ -656,6 +667,21 @@ if __name__ == "__main__":
         logger.info("Saved demo output plot to solid_state_outputs.png")
     except Exception as exc:  # pragma: no cover - demo should not crash server
         logger.exception("Solid state model demo failed: %s", exc)
+
+    # --- quick demo run of the 2-D thermal model ---
+    try:
+        x, y, snaps, final_T, stats = _thermal2d.run_simulation()
+        buf = _thermal2d.temperature_plot_to_buffer(x, y, snaps + [final_T])
+        with open("2dthermal_result.png", "wb") as f:
+            f.write(buf.getvalue())
+        logger.info("Saved 2-D thermal demo plot to 2dthermal_result.png")
+        logger.info(
+            "2-D thermal demo -> max %.2f K, avg %.2f K",
+            stats["max_asic_K"],
+            stats["avg_asic_K"],
+        )
+    except Exception as exc:  # pragma: no cover - demo should not crash server
+        logger.exception("2-D thermal model demo failed: %s", exc)
 
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
 
