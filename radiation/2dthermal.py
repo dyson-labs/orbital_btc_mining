@@ -1,3 +1,4 @@
+import io
 import numpy as np
 import matplotlib
 
@@ -155,9 +156,21 @@ def plot_temperature(x, y, temps):
     return fig
 
 
+def temperature_plot_to_buffer(x, y, temps):
+    """Return a PNG buffer with the temperature plot."""
+
+    fig = plot_temperature(x, y, temps)
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=200)
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
 if __name__ == "__main__":
     x, y, snaps, final_T, stats = run_simulation()
-    fig = plot_temperature(x, y, snaps + [final_T])
-    fig.savefig("2dthermal_result.png", dpi=200)
+    buf = temperature_plot_to_buffer(x, y, snaps + [final_T])
+    with open("2dthermal_result.png", "wb") as f:
+        f.write(buf.getvalue())
     print(f"Max ASIC temp: {stats['max_asic_K']:.2f} K")
     print(f"Avg ASIC temp: {stats['avg_asic_K']:.2f} K")

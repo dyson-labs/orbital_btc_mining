@@ -671,8 +671,10 @@ if __name__ == "__main__":
     # --- quick demo run of the 2-D thermal model ---
     try:
         x, y, snaps, final_T, stats = _thermal2d.run_simulation()
-        fig = _thermal2d.plot_temperature(x, y, snaps + [final_T])
-        fig.savefig("2dthermal_result.png", dpi=200)
+        buf = _thermal2d.temperature_plot_to_buffer(x, y, snaps + [final_T])
+        with open("2dthermal_result.png", "wb") as f:
+            f.write(buf.getvalue())
+        logger.info("Saved 2-D thermal demo plot to 2dthermal_result.png")
         logger.info(
             "2-D thermal demo -> max %.2f K, avg %.2f K",
             stats["max_asic_K"],
