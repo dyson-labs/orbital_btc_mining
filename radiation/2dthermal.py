@@ -1,4 +1,5 @@
 import io
+import base64
 import numpy as np
 import matplotlib
 
@@ -165,6 +166,13 @@ def temperature_plot_to_buffer(x, y, temps):
     plt.close(fig)
     buf.seek(0)
     return buf
+
+
+def temperature_plot_base64(x, y, temps):
+    """Return a base64-encoded PNG of the temperature plot."""
+
+    buf = temperature_plot_to_buffer(x, y, temps)
+    return base64.b64encode(buf.getvalue()).decode("utf-8")
 
 
 if __name__ == "__main__":

@@ -236,6 +236,11 @@ def orbit_visuals(idx: int):
             plot3d=True,
             verbose=False,
         )
+        # Run the 2-D thermal model for a representative snapshot
+        x2d, y2d, snaps2d, final2d, _ = _thermal2d.run_simulation()
+        thermal2d_buf = _thermal2d.temperature_plot_to_buffer(
+            x2d, y2d, snaps2d + [final2d]
+        )
         orbit_buf = plot_orbit_to_buffer(env)
         rf_buf = None
         comms_mode = request.args.get("comms", "ground")
@@ -252,6 +257,9 @@ def orbit_visuals(idx: int):
                 base64.b64encode(thermal_buf.getvalue()).decode("utf-8")
                 if thermal_buf
                 else None
+            ),
+            "thermal2d_plot": base64.b64encode(thermal2d_buf.getvalue()).decode(
+                "utf-8"
             ),
             "rf_plot": (
                 base64.b64encode(rf_buf.getvalue()).decode("utf-8") if rf_buf else None
@@ -391,6 +399,10 @@ def api_simulate():
             dt=60,
             plot3d=True,
             verbose=False,
+        )
+        x2d, y2d, snaps2d, final2d, _ = _thermal2d.run_simulation()
+        thermal2d_buf = _thermal2d.temperature_plot_to_buffer(
+            x2d, y2d, snaps2d + [final2d]
         )
 
         comms_mode = data.get("comms_mode", "ground")
@@ -611,6 +623,9 @@ def api_simulate():
                 base64.b64encode(thermal_buf.getvalue()).decode("utf-8")
                 if thermal_buf
                 else None
+            ),
+            "thermal2d_plot": base64.b64encode(thermal2d_buf.getvalue()).decode(
+                "utf-8"
             ),
             "rf_plot": (
                 base64.b64encode(rf_buf.getvalue()).decode("utf-8") if rf_buf else None
