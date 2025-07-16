@@ -166,6 +166,41 @@ def plot_temperature(x, y, temps):
     return fig
 
 
+def single_temp_plot_to_buffer(x, y, temp, vmin=None, vmax=None):
+    """Return a PNG buffer for one temperature snapshot."""
+    extent = [x[0], x[-1], y[0], y[-1]]
+    fig, ax = plt.subplots(figsize=DEFAULT_FIGSIZE)
+    im = ax.imshow(
+        temp,
+        origin="lower",
+        extent=extent,
+        aspect="auto",
+        cmap="inferno",
+        vmin=vmin,
+        vmax=vmax,
+    )
+    fig.colorbar(im, ax=ax, shrink=0.8, label="Temperature (K)")
+    ax.set_xlabel("x (mm)")
+    ax.set_ylabel("y (mm)")
+    fig.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=200)
+    plt.close(fig)
+    buf.seek(0)
+    return buf
+
+
+def temperature_frames_base64(x, y, temps):
+    """Return a list of base64 PNGs for each snapshot."""
+    vmin = float(np.min(temps[0]))
+    vmax = float(np.max(temps[-1]))
+    frames = []
+    for t in temps:
+        buf = single_temp_plot_to_buffer(x, y, t, vmin=vmin, vmax=vmax)
+        frames.append(base64.b64encode(buf.getvalue()).decode("utf-8"))
+    return frames
+
+
 def temperature_plot_to_buffer(x, y, temps):
     """Return a PNG buffer with the temperature plot."""
 
@@ -189,5 +224,9 @@ if __name__ == "__main__":
     buf = temperature_plot_to_buffer(x, y, snaps + [final_T])
     with open("2dthermal_result.png", "wb") as f:
         f.write(buf.getvalue())
+    frames = temperature_frames_base64(x, y, snaps + [final_T])
+    for i, b64 in enumerate(frames):
+        with open(f"2dthermal_frame_{i}.png", "wb") as f:
+            f.write(base64.b64decode(b64))
     print(f"Max ASIC temp: {stats['max_asic_K']:.2f} K")
     print(f"Avg ASIC temp: {stats['avg_asic_K']:.2f} K")
