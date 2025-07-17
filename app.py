@@ -237,11 +237,15 @@ def orbit_visuals(idx: int):
             verbose=False,
         )
         # Run the 2-D thermal model for a representative snapshot
-        x2d, y2d, snaps2d, final2d, _, boundaries = _thermal2d.run_simulation(
+        x2d, y2d, snaps2d, final2d, stats2d, boundaries = _thermal2d.run_simulation(
             total_time_s=4.0
         )
         thermal2d_frames = _thermal2d.temperature_frames_base64(
-            x2d, y2d, snaps2d + [final2d], layer_boundaries_mm=boundaries
+            x2d,
+            y2d,
+            snaps2d,
+            layer_boundaries_mm=boundaries,
+            times_s=stats2d.get("snapshot_times_s"),
         )
         orbit_buf = plot_orbit_to_buffer(env)
         rf_buf = None
@@ -400,11 +404,15 @@ def api_simulate():
             plot3d=True,
             verbose=False,
         )
-        x2d, y2d, snaps2d, final2d, _, boundaries = _thermal2d.run_simulation(
+        x2d, y2d, snaps2d, final2d, stats2d, boundaries = _thermal2d.run_simulation(
             total_time_s=4.0
         )
         thermal2d_frames = _thermal2d.temperature_frames_base64(
-            x2d, y2d, snaps2d + [final2d], layer_boundaries_mm=boundaries
+            x2d,
+            y2d,
+            snaps2d,
+            layer_boundaries_mm=boundaries,
+            times_s=stats2d.get("snapshot_times_s"),
         )
 
         comms_mode = data.get("comms_mode", "ground")
@@ -689,7 +697,11 @@ if __name__ == "__main__":
             total_time_s=4.0
         )
         buf = _thermal2d.temperature_plot_to_buffer(
-            x, y, snaps + [final_T], layer_boundaries_mm=boundaries
+            x,
+            y,
+            snaps,
+            layer_boundaries_mm=boundaries,
+            times_s=stats.get("snapshot_times_s"),
         )
         with open("2dthermal_result.png", "wb") as f:
             f.write(buf.getvalue())

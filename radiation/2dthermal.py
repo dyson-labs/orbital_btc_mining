@@ -27,7 +27,7 @@ ASIC_POWER_W = 9.0
 DOMAIN_WIDTH_MM = 20.0
 DX_MM = 1.0
 DY_MM = 0.5
-DT_S = 0.5  # timestep [s]
+DT_S = 0.5  # requested timestep [s] -- may be reduced for stability
 TOTAL_TIME_S = 90 * 60  # simulate one orbit (90 min)
 ALPHA_TOP = 0.9
 EPS_TOP = 0.9
@@ -106,53 +106,47 @@ def run_simulation(
     dy = DY_MM / 1000.0
     nx = len(x)
     ny = len(y)
-    steps = int(total_time_s / dt_s)
-    T = np.full((ny, nx), INITIAL_T)
+
+    # Calculate diffusivity and stable timestep
+    alpha = k / (rho * cp)
+    dt_stable = (dx ** 2 * dy ** 2) / (2.0 * np.max(alpha) * (dx ** 2 + dy ** 2))
+    dt = min(dt_s, 0.5 * dt_stable)
+
+    steps = int(total_time_s / dt)
     record_steps = [0, steps // 4, steps // 2, steps - 1]
+    snapshot_times = [s * dt for s in record_steps]
+
+    T = np.full((ny, nx), INITIAL_T)
     snapshots = []
+    src = Q / (rho * cp)
+
     for n in range(steps):
-        T_new = T.copy()
-        for j in range(ny):
-            for i in range(nx):
-                k_ij = k[j, i]
-                rho_ij = rho[j, i]
-                cp_ij = cp[j, i]
-                alpha = k_ij / (rho_ij * cp_ij)
-                src = Q[j, i] / (rho_ij * cp_ij)
-                if i == 0:
-                    d2Tdx2 = (T[j, 1] - T[j, 0]) / dx**2
-                elif i == nx - 1:
-                    d2Tdx2 = (T[j, nx - 2] - T[j, nx - 1]) / dx**2
-                else:
-                    d2Tdx2 = (T[j, i + 1] - 2 * T[j, i] + T[j, i - 1]) / dx**2
-                if j == 0:
-                    q_top = ALPHA_TOP * SOLAR_FLUX - EPS_TOP * SIGMA * (
-                        T[j, i] ** 4 - T_SPACE**4
-                    )
-                    d2Tdy2 = (T[1, i] - T[0, i]) / dy**2
-                    bc = q_top / (rho_ij * cp_ij * dy)
-                elif j == ny - 1:
-                    q_bot = -EPS_BOTTOM * view_factor * area_factor * SIGMA * (
-                        T[j, i] ** 4 - T_SPACE**4
-                    )
-                    d2Tdy2 = (T[j - 1, i] - T[j, i]) / dy**2
-                    bc = q_bot / (rho_ij * cp_ij * dy)
-                else:
-                    d2Tdy2 = (T[j + 1, i] - 2 * T[j, i] + T[j - 1, i]) / dy**2
-                    bc = 0.0
-                T_new[j, i] = T[j, i] + dt_s * (alpha * (d2Tdx2 + d2Tdy2) + src + bc)
-        T = T_new
+        # Pad for easy finite differences (Neumann on lateral sides)
+        T_pad = np.pad(T, ((1, 1), (1, 1)), mode="edge")
+        d2Tdx2 = (T_pad[1:-1, 2:] - 2 * T + T_pad[1:-1, :-2]) / dx ** 2
+        d2Tdy2 = (T_pad[2:, 1:-1] - 2 * T + T_pad[:-2, 1:-1]) / dy ** 2
+
+        bc = np.zeros_like(T)
+        q_top = ALPHA_TOP * SOLAR_FLUX - EPS_TOP * SIGMA * (T[0, :] ** 4 - T_SPACE ** 4)
+        bc[0, :] += q_top / (rho[0, :] * cp[0, :] * dy)
+        q_bot = -EPS_BOTTOM * view_factor * area_factor * SIGMA * (T[-1, :] ** 4 - T_SPACE ** 4)
+        bc[-1, :] += q_bot / (rho[-1, :] * cp[-1, :] * dy)
+
+        T = T + dt * (alpha * (d2Tdx2 + d2Tdy2) + src + bc)
+
         if n in record_steps:
             snapshots.append(T.copy())
     asic_temps = T[asic_slice]
     stats = {
         "max_asic_K": float(np.max(asic_temps)),
         "avg_asic_K": float(np.mean(asic_temps)),
+        "snapshot_times_s": snapshot_times,
+        "actual_dt_s": dt,
     }
     return x, y, snapshots, T, stats, boundaries
 
 
-def plot_temperature(x, y, temps, layer_boundaries_mm):
+def plot_temperature(x, y, temps, layer_boundaries_mm, times_s=None):
     """Plot one or more temperature snapshots with layer boundaries."""
 
     extent = [x[0], x[-1], y[0], y[-1]]
@@ -168,7 +162,10 @@ def plot_temperature(x, y, temps, layer_boundaries_mm):
     layer_mid = 0.5 * (np.array(layer_boundaries_mm[:-1]) + np.array(layer_boundaries_mm[1:]))
     layer_labels = [l.replace("_", " ") for l in LAYER_ORDER]
 
-    for ax, data in zip(axes, temps):
+    if times_s is None:
+        times_s = [None] * len(temps)
+
+    for ax, data, t in zip(axes, temps, times_s):
         im = ax.imshow(
             data,
             origin="lower",
@@ -186,11 +183,32 @@ def plot_temperature(x, y, temps, layer_boundaries_mm):
         for boundary in layer_boundaries_mm:
             ax.axhline(y=boundary, color="cyan", linestyle="--", linewidth=0.7)
 
+        if t is not None:
+            ax.text(
+                0.02,
+                0.95,
+                f"t = {t:.1f} s",
+                transform=ax.transAxes,
+                color="white",
+                fontsize=8,
+                ha="left",
+                va="top",
+                bbox={"facecolor": "black", "alpha": 0.3, "boxstyle": "round"},
+            )
+
     fig.tight_layout()
     return fig
 
 
-def single_temp_plot_to_buffer(x, y, temp, vmin=None, vmax=None, layer_boundaries_mm=None):
+def single_temp_plot_to_buffer(
+    x,
+    y,
+    temp,
+    vmin=None,
+    vmax=None,
+    layer_boundaries_mm=None,
+    time_s=None,
+):
     """Return a PNG buffer for one temperature snapshot."""
     extent = [x[0], x[-1], y[0], y[-1]]
     fig, ax = plt.subplots(figsize=DEFAULT_FIGSIZE)
@@ -212,6 +230,18 @@ def single_temp_plot_to_buffer(x, y, temp, vmin=None, vmax=None, layer_boundarie
         ax.set_yticklabels([l.replace("_", " ") for l in LAYER_ORDER])
         for boundary in layer_boundaries_mm:
             ax.axhline(y=boundary, color="cyan", linestyle="--", linewidth=0.7)
+    if time_s is not None:
+        ax.text(
+            0.02,
+            0.95,
+            f"t = {time_s:.1f} s",
+            transform=ax.transAxes,
+            color="white",
+            fontsize=8,
+            ha="left",
+            va="top",
+            bbox={"facecolor": "black", "alpha": 0.3, "boxstyle": "round"},
+        )
     fig.tight_layout()
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=200)
@@ -220,23 +250,32 @@ def single_temp_plot_to_buffer(x, y, temp, vmin=None, vmax=None, layer_boundarie
     return buf
 
 
-def temperature_frames_base64(x, y, temps, layer_boundaries_mm=None):
+def temperature_frames_base64(x, y, temps, layer_boundaries_mm=None, times_s=None):
     """Return a list of base64 PNGs for each snapshot."""
     vmin = float(np.min(temps[0]))
     vmax = float(np.max(temps[-1]))
     frames = []
-    for t in temps:
+    if times_s is None:
+        times_s = [None] * len(temps)
+
+    for t_img, t_sec in zip(temps, times_s):
         buf = single_temp_plot_to_buffer(
-            x, y, t, vmin=vmin, vmax=vmax, layer_boundaries_mm=layer_boundaries_mm
+            x,
+            y,
+            t_img,
+            vmin=vmin,
+            vmax=vmax,
+            layer_boundaries_mm=layer_boundaries_mm,
+            time_s=t_sec,
         )
         frames.append(base64.b64encode(buf.getvalue()).decode("utf-8"))
     return frames
 
 
-def temperature_plot_to_buffer(x, y, temps, layer_boundaries_mm=None):
+def temperature_plot_to_buffer(x, y, temps, layer_boundaries_mm=None, times_s=None):
     """Return a PNG buffer with the temperature plot."""
 
-    fig = plot_temperature(x, y, temps, layer_boundaries_mm)
+    fig = plot_temperature(x, y, temps, layer_boundaries_mm, times_s)
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=200)
     plt.close(fig)
@@ -244,10 +283,10 @@ def temperature_plot_to_buffer(x, y, temps, layer_boundaries_mm=None):
     return buf
 
 
-def temperature_plot_base64(x, y, temps, layer_boundaries_mm=None):
+def temperature_plot_base64(x, y, temps, layer_boundaries_mm=None, times_s=None):
     """Return a base64-encoded PNG of the temperature plot."""
 
-    buf = temperature_plot_to_buffer(x, y, temps, layer_boundaries_mm)
+    buf = temperature_plot_to_buffer(x, y, temps, layer_boundaries_mm, times_s)
     return base64.b64encode(buf.getvalue()).decode("utf-8")
 
 
@@ -257,10 +296,23 @@ if __name__ == "__main__":
         total_time_s=4.0,
         dt_s=DT_S,
     )
-    fig = plot_temperature(x, y, snaps + [final_T], layer_boundaries_mm=boundaries)
+    times = stats.get("snapshot_times_s", [])
+    fig = plot_temperature(
+        x,
+        y,
+        snaps,
+        layer_boundaries_mm=boundaries,
+        times_s=times,
+    )
     fig.savefig("2dthermal_result.png", dpi=200)
     plt.close(fig)
-    frames = temperature_frames_base64(x, y, snaps + [final_T], layer_boundaries_mm=boundaries)
+    frames = temperature_frames_base64(
+        x,
+        y,
+        snaps,
+        layer_boundaries_mm=boundaries,
+        times_s=times,
+    )
     for i, b64 in enumerate(frames):
         with open(f"2dthermal_frame_{i}.png", "wb") as f:
             f.write(base64.b64decode(b64))
