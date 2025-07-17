@@ -27,8 +27,8 @@ ASIC_POWER_W = 9.0
 DOMAIN_WIDTH_MM = 20.0
 DX_MM = 1.0
 DY_MM = 0.5
-DT_S = 0.0005
-TOTAL_TIME_S = 4.0
+DT_S = 0.5  # timestep [s]
+TOTAL_TIME_S = 90 * 60  # simulate one orbit (90 min)
 ALPHA_TOP = 0.9
 EPS_TOP = 0.9
 EPS_BOTTOM = 0.85
@@ -39,12 +39,15 @@ SOLAR_FLUX = 1361.0
 SIGMA = 5.670374419e-8
 INITIAL_T = 290.0
 
+# Names of the layers from top (y=0) to bottom
+LAYER_ORDER = ["solar_cells", "tim1", "pcb", "asic", "tim2", "radiator"]
+
 # =====================================================================
 # Helper routines
 # =====================================================================
 
 def build_material_grid():
-    layer_order = ["solar_cells", "tim1", "pcb", "asic", "tim2", "radiator"]
+    layer_order = LAYER_ORDER
     thicknesses = [MATERIALS[l]["thickness"] for l in layer_order]
     total_thickness_mm = sum(thicknesses)
     ny = int(np.ceil(total_thickness_mm / DY_MM)) + 1
@@ -90,13 +93,20 @@ def build_material_grid():
     return x, y, k, rho, cp, Q, asic_slice, boundaries
 
 
-def run_simulation(view_factor=VIEW_FACTOR_BOTTOM, area_factor=AREA_FACTOR_BOTTOM):
+def run_simulation(
+    view_factor=VIEW_FACTOR_BOTTOM,
+    area_factor=AREA_FACTOR_BOTTOM,
+    total_time_s=TOTAL_TIME_S,
+    dt_s=DT_S,
+):
+    """Run the transient 2-D thermal model."""
+
     x, y, k, rho, cp, Q, asic_slice, boundaries = build_material_grid()
     dx = DX_MM / 1000.0
     dy = DY_MM / 1000.0
     nx = len(x)
     ny = len(y)
-    steps = int(TOTAL_TIME_S / DT_S)
+    steps = int(total_time_s / dt_s)
     T = np.full((ny, nx), INITIAL_T)
     record_steps = [0, steps // 4, steps // 2, steps - 1]
     snapshots = []
@@ -130,7 +140,7 @@ def run_simulation(view_factor=VIEW_FACTOR_BOTTOM, area_factor=AREA_FACTOR_BOTTO
                 else:
                     d2Tdy2 = (T[j + 1, i] - 2 * T[j, i] + T[j - 1, i]) / dy**2
                     bc = 0.0
-                T_new[j, i] = T[j, i] + DT_S * (alpha * (d2Tdx2 + d2Tdy2) + src + bc)
+                T_new[j, i] = T[j, i] + dt_s * (alpha * (d2Tdx2 + d2Tdy2) + src + bc)
         T = T_new
         if n in record_steps:
             snapshots.append(T.copy())
@@ -155,6 +165,9 @@ def plot_temperature(x, y, temps, layer_boundaries_mm):
     if len(temps) == 1:
         axes = [axes]
 
+    layer_mid = 0.5 * (np.array(layer_boundaries_mm[:-1]) + np.array(layer_boundaries_mm[1:]))
+    layer_labels = [l.replace("_", " ") for l in LAYER_ORDER]
+
     for ax, data in zip(axes, temps):
         im = ax.imshow(
             data,
@@ -166,6 +179,8 @@ def plot_temperature(x, y, temps, layer_boundaries_mm):
         fig.colorbar(im, ax=ax, shrink=0.8, label="Temperature (K)")
         ax.set_xlabel("x (mm)")
         ax.set_ylabel("y (mm)")
+        ax.set_yticks(layer_mid)
+        ax.set_yticklabels(layer_labels)
 
         # Mark boundaries between layers
         for boundary in layer_boundaries_mm:
@@ -192,6 +207,9 @@ def single_temp_plot_to_buffer(x, y, temp, vmin=None, vmax=None, layer_boundarie
     ax.set_xlabel("x (mm)")
     ax.set_ylabel("y (mm)")
     if layer_boundaries_mm is not None:
+        mid = 0.5 * (np.array(layer_boundaries_mm[:-1]) + np.array(layer_boundaries_mm[1:]))
+        ax.set_yticks(mid)
+        ax.set_yticklabels([l.replace("_", " ") for l in LAYER_ORDER])
         for boundary in layer_boundaries_mm:
             ax.axhline(y=boundary, color="cyan", linestyle="--", linewidth=0.7)
     fig.tight_layout()
@@ -234,7 +252,11 @@ def temperature_plot_base64(x, y, temps, layer_boundaries_mm=None):
 
 
 if __name__ == "__main__":
-    x, y, snaps, final_T, stats, boundaries = run_simulation()
+    # Short demo run so the script finishes quickly when executed directly
+    x, y, snaps, final_T, stats, boundaries = run_simulation(
+        total_time_s=4.0,
+        dt_s=DT_S,
+    )
     fig = plot_temperature(x, y, snaps + [final_T], layer_boundaries_mm=boundaries)
     fig.savefig("2dthermal_result.png", dpi=200)
     plt.close(fig)
