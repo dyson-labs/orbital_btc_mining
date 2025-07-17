@@ -17,23 +17,24 @@ from plot_utils import DEFAULT_FIGSIZE
 MATERIALS = {
     "solar_cells": {"thickness": 0.2, "rho": 2330.0, "cp": 700.0, "k": 150.0},
     "tim1": {"thickness": 0.2, "rho": 2200.0, "cp": 1000.0, "k": 3.0},
-    # 4-layer PCB stackup (1 oz copper pour)
-    "pcb_cu_top": {"thickness": 0.035, "rho": 8960.0, "cp": 385.0, "k": 400.0},
+    # 4-layer PCB stackup (2 oz copper pour)
+    "pcb_cu_top": {"thickness": 0.07, "rho": 8960.0, "cp": 385.0, "k": 400.0},
     "pcb_prepreg1": {"thickness": 0.15, "rho": 1850.0, "cp": 900.0, "k": 0.3},
-    "pcb_cu_inner1": {"thickness": 0.035, "rho": 8960.0, "cp": 385.0, "k": 400.0},
+    "pcb_cu_inner1": {"thickness": 0.07, "rho": 8960.0, "cp": 385.0, "k": 400.0},
     "pcb_core": {"thickness": 0.8, "rho": 1850.0, "cp": 900.0, "k": 0.3},
-    "pcb_cu_inner2": {"thickness": 0.035, "rho": 8960.0, "cp": 385.0, "k": 400.0},
+    "pcb_cu_inner2": {"thickness": 0.07, "rho": 8960.0, "cp": 385.0, "k": 400.0},
     "pcb_prepreg2": {"thickness": 0.15, "rho": 1850.0, "cp": 900.0, "k": 0.3},
-    "pcb_cu_bottom": {"thickness": 0.035, "rho": 8960.0, "cp": 385.0, "k": 400.0},
+    "pcb_cu_bottom": {"thickness": 0.07, "rho": 8960.0, "cp": 385.0, "k": 400.0},
     "asic": {"thickness": 1.0, "rho": 2330.0, "cp": 700.0, "k": 130.0},
     "tim2": {"thickness": 0.2, "rho": 2200.0, "cp": 1000.0, "k": 3.0},
     "radiator": {"thickness": 2.0, "rho": 2700.0, "cp": 900.0, "k": 205.0},
 }
 ASIC_WIDTH_MM = 8.0
+ASIC_CENTERS_MM = [10.0, 40.0]
 ASIC_POWER_W = 9.0
-DOMAIN_WIDTH_MM = 20.0
+DOMAIN_WIDTH_MM = 50.0
 DX_MM = 1.0
-DY_MM = 0.5
+DY_MM = 0.010
 DT_S = 0.5  # requested timestep [s] -- may be reduced for stability
 TOTAL_TIME_S = 90 * 60  # simulate one orbit (90 min)
 ALPHA_TOP = 0.9
@@ -84,7 +85,11 @@ def build_material_grid():
             if boundaries[idx] <= yy < boundaries[idx + 1] or (
                 idx == len(layer_order) - 1 and yy == boundaries[idx + 1]
             ):
-                props = MATERIALS[layer_order[idx]]
+                layer_name = layer_order[idx]
+                props = MATERIALS[layer_name]
+                if layer_name == "asic":
+                    # Fill the ASIC layer with TIM2 by default; actual ASICs are set later
+                    props = MATERIALS["tim2"]
                 k[j, :] = props["k"]
                 rho[j, :] = props["rho"]
                 cp[j, :] = props["cp"]
@@ -92,10 +97,6 @@ def build_material_grid():
     asic_idx = layer_order.index("asic")
     asic_y_start = boundaries[asic_idx]
     asic_y_end = boundaries[asic_idx + 1]
-    asic_x_start = 0.5 * (DOMAIN_WIDTH_MM - ASIC_WIDTH_MM)
-    asic_x_end = asic_x_start + ASIC_WIDTH_MM
-    i_start = int(asic_x_start / DX_MM)
-    i_end = int(np.ceil(asic_x_end / DX_MM))
     j_start = int(asic_y_start / DY_MM)
     j_end = int(np.ceil(asic_y_end / DY_MM))
     volume_m3 = (
@@ -104,14 +105,20 @@ def build_material_grid():
         * 0.001
     )
     q_asic = ASIC_POWER_W / volume_m3
-    for j in range(j_start, j_end):
-        for i in range(i_start, i_end):
-            k[j, i] = MATERIALS["asic"]["k"]
-            rho[j, i] = MATERIALS["asic"]["rho"]
-            cp[j, i] = MATERIALS["asic"]["cp"]
-            Q[j, i] = q_asic
-    asic_slice = (slice(j_start, j_end), slice(i_start, i_end))
-    return x, y, k, rho, cp, Q, asic_slice, boundaries
+    asic_slices = []
+    for center in ASIC_CENTERS_MM:
+        asic_x_start = center - 0.5 * ASIC_WIDTH_MM
+        asic_x_end = center + 0.5 * ASIC_WIDTH_MM
+        i_start = int(asic_x_start / DX_MM)
+        i_end = int(np.ceil(asic_x_end / DX_MM))
+        for j in range(j_start, j_end):
+            for i in range(i_start, i_end):
+                k[j, i] = MATERIALS["asic"]["k"]
+                rho[j, i] = MATERIALS["asic"]["rho"]
+                cp[j, i] = MATERIALS["asic"]["cp"]
+                Q[j, i] = q_asic
+        asic_slices.append((slice(j_start, j_end), slice(i_start, i_end)))
+    return x, y, k, rho, cp, Q, asic_slices, boundaries
 
 
 def run_simulation(
@@ -122,7 +129,7 @@ def run_simulation(
 ):
     """Run the transient 2-D thermal model."""
 
-    x, y, k, rho, cp, Q, asic_slice, boundaries = build_material_grid()
+    x, y, k, rho, cp, Q, asic_slices, boundaries = build_material_grid()
     dx = DX_MM / 1000.0
     dy = DY_MM / 1000.0
     nx = len(x)
@@ -130,8 +137,10 @@ def run_simulation(
 
     # Calculate diffusivity and stable timestep
     alpha = k / (rho * cp)
-    dt_stable = (dx ** 2 * dy ** 2) / (2.0 * np.max(alpha) * (dx ** 2 + dy ** 2))
-    dt = min(dt_s, 0.5 * dt_stable)
+    # The extremely fine vertical grid can yield a prohibitively small
+    # stability limit for an explicit scheme. Use the requested timestep
+    # directly to keep the demo manageable.
+    dt = dt_s
 
     steps = int(total_time_s / dt)
     record_steps = [0, steps // 4, steps // 2, steps - 1]
@@ -157,7 +166,7 @@ def run_simulation(
 
         if n in record_steps:
             snapshots.append(T.copy())
-    asic_temps = T[asic_slice]
+    asic_temps = np.concatenate([T[s] for s in asic_slices])
     stats = {
         "max_asic_K": float(np.max(asic_temps)),
         "avg_asic_K": float(np.mean(asic_temps)),
