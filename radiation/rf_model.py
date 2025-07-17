@@ -7,6 +7,10 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from plot_utils import DEFAULT_FIGSIZE
 
 VERBOSE = True  # Set to False for silent operation except summary
 
@@ -1170,7 +1174,7 @@ def rf_margin_plot_to_buffer(tle, networks=None, dt=60, verbose=False):
         tle, networks=networks, dt=dt, verbose=verbose
     )
     hours = np.array(times) / 3600.0
-    fig, ax = plt.subplots(figsize=(6, 4))
+    fig, ax = plt.subplots(figsize=DEFAULT_FIGSIZE)
     ax.plot(hours, margins)
     ax.set_xlabel("Time (hr)")
     ax.set_ylabel("Downlink Margin (dB)")
@@ -1199,7 +1203,7 @@ def constant_margin_plot_to_buffer(margin_dB=5.0, period_s=5400, dt=60):
     times = np.arange(0, period_s + dt, dt)
     margins = np.full_like(times, margin_dB, dtype=float)
     hours = times / 3600.0
-    fig, ax = plt.subplots(figsize=(6, 4))
+    fig, ax = plt.subplots(figsize=DEFAULT_FIGSIZE)
     ax.plot(hours, margins)
     ax.set_xlabel("Time (hr)")
     ax.set_ylabel("Downlink Margin (dB)")
