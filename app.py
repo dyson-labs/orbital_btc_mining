@@ -10,6 +10,7 @@ matplotlib.use("Agg")
 import base64
 import json
 import os
+import numpy as np
 import pandas as pd
 from astropy import units as u
 from analysis.orbit_plot import plot_orbit_to_buffer
@@ -237,8 +238,12 @@ def orbit_visuals(idx: int):
             verbose=False,
         )
         # Run the 2-D thermal model for a representative snapshot
+        illum_t, illum = env.illumination_profile(
+            dt=_thermal2d.DT_S,
+            n_periods=max(1, int(np.ceil(_thermal2d.TOTAL_TIME_S / period_s))),
+        )
         x2d, y2d, snaps2d, final2d, stats2d, boundaries = _thermal2d.run_simulation(
-            total_time_s=_thermal2d.DT_S
+            illumination_profile=(illum_t, illum)
         )
         thermal2d_frames = _thermal2d.temperature_frames_base64(
             x2d,
@@ -404,8 +409,12 @@ def api_simulate():
             plot3d=True,
             verbose=False,
         )
+        illum_t, illum = env.illumination_profile(
+            dt=_thermal2d.DT_S,
+            n_periods=max(1, int(np.ceil(_thermal2d.TOTAL_TIME_S / period_s))),
+        )
         x2d, y2d, snaps2d, final2d, stats2d, boundaries = _thermal2d.run_simulation(
-            total_time_s=_thermal2d.DT_S
+            illumination_profile=(illum_t, illum)
         )
         thermal2d_frames = _thermal2d.temperature_frames_base64(
             x2d,
@@ -694,7 +703,8 @@ if __name__ == "__main__":
     # --- quick demo run of the 2-D thermal model ---
     try:
         x, y, snaps, final_T, stats, boundaries = _thermal2d.run_simulation(
-            total_time_s=_thermal2d.DT_S
+            total_time_s=4 * _thermal2d.DT_S,
+            dt_s=_thermal2d.DT_S,
         )
         buf = _thermal2d.temperature_plot_to_buffer(
             x,

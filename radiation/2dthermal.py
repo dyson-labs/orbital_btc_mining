@@ -42,8 +42,8 @@ TOTAL_TIME_S = 180 * 60  # simulate at least two orbits (180 min)
 ALPHA_SOLAR = 0.9  # absorptivity of the solar-cell side
 EPS_RADIATOR = 0.9
 EPS_SOLAR = 0.85
-VIEW_FACTOR_TOP = 1.0
-AREA_FACTOR_TOP = 1.0
+VIEW_FACTOR_RADIATOR = 1.0
+AREA_FACTOR_RADIATOR = 1.0
 T_SPACE = 3.0
 SOLAR_FLUX = 1361.0
 SIGMA = 5.670374419e-8
@@ -124,12 +124,25 @@ def build_material_grid():
 
 
 def run_simulation(
-    view_factor=VIEW_FACTOR_TOP,
-    area_factor=AREA_FACTOR_TOP,
+    view_factor_radiator=VIEW_FACTOR_RADIATOR,
+    area_factor_radiator=AREA_FACTOR_RADIATOR,
     total_time_s=TOTAL_TIME_S,
     dt_s=DT_S,
+    illumination_profile=None,
 ):
-    """Run the transient 2-D thermal model."""
+    """Run the transient 2-D thermal model.
+
+    Parameters
+    ----------
+    view_factor_radiator, area_factor_radiator : float
+        Radiator view factor and area multiplier for the top boundary.
+    total_time_s : float
+        Duration of the simulation if ``illumination_profile`` is not provided.
+    dt_s : float
+        Timestep size when ``illumination_profile`` is not provided.
+    illumination_profile : tuple of (times, illumination)
+        Optional arrays describing the sunlight exposure over time.
+    """
 
     x, y, k, rho, cp, Q, asic_slices, boundaries = build_material_grid()
     dx = DX_MM / 1000.0
@@ -138,9 +151,17 @@ def run_simulation(
     ny = len(y)
 
     alpha = k / (rho * cp)
-    dt = dt_s
 
-    steps = int(total_time_s / dt)
+    if illumination_profile is not None:
+        times, illum = illumination_profile
+        dt = float(np.mean(np.diff(times)))
+        steps = len(times)
+        total_time_s = times[-1]
+    else:
+        dt = dt_s
+        steps = int(total_time_s / dt)
+        illum = np.ones(steps, dtype=int)
+
     record_steps = [0, steps // 4, steps // 2, steps - 1]
     snapshot_times = [s * dt for s in record_steps]
 
@@ -188,11 +209,11 @@ def run_simulation(
 
     for n in range(steps):
         bc = np.zeros_like(T)
-        q_top = -EPS_RADIATOR * view_factor * area_factor * SIGMA * (
+        q_top = -EPS_RADIATOR * view_factor_radiator * area_factor_radiator * SIGMA * (
             T[0, :] ** 4 - T_SPACE ** 4
         )
         bc[0, :] += q_top / (rho[0, :] * cp[0, :] * dy)
-        q_bot = ALPHA_SOLAR * SOLAR_FLUX - EPS_SOLAR * SIGMA * (
+        q_bot = illum[n] * ALPHA_SOLAR * SOLAR_FLUX - EPS_SOLAR * SIGMA * (
             T[-1, :] ** 4 - T_SPACE ** 4
         )
         bc[-1, :] += q_bot / (rho[-1, :] * cp[-1, :] * dy)
@@ -358,9 +379,9 @@ def temperature_plot_base64(x, y, temps, layer_boundaries_mm=None, times_s=None)
 
 
 if __name__ == "__main__":
-    # Short demo run with a tiny total time so execution remains quick.
+    # Short demo run with a few timesteps so execution remains quick.
     x, y, snaps, final_T, stats, boundaries = run_simulation(
-        total_time_s=DT_S,
+        total_time_s=4 * DT_S,
         dt_s=DT_S,
     )
     times = stats.get("snapshot_times_s", [])
