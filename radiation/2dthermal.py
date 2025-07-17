@@ -38,7 +38,7 @@ DOMAIN_WIDTH_MM = 50.0
 DX_MM = 1.0
 DY_MM = 0.010
 DT_S = 10.0  # default timestep [s]
-TOTAL_TIME_S = 180 * 60  # simulate at least two orbits (180 min)
+TOTAL_TIME_S = 90 * 60  # simulate one orbit (90 min)
 ALPHA_SOLAR = 0.9  # absorptivity of the solar-cell side
 EPS_RADIATOR = 0.9
 EPS_SOLAR = 0.85
@@ -49,11 +49,10 @@ SOLAR_FLUX = 1361.0
 SIGMA = 5.670374419e-8
 INITIAL_T = 290.0
 
-# Names of the layers from top (y=0, radiator) to bottom (solar cells)
+# Names of the layers from top (y=0, solar cells) to bottom (radiator)
 LAYER_ORDER = [
-    "radiator",
-    "tim2",
-    "asic",
+    "solar_cells",
+    "tim1",
     "pcb_cu_top",
     "pcb_prepreg1",
     "pcb_cu_inner1",
@@ -61,8 +60,9 @@ LAYER_ORDER = [
     "pcb_cu_inner2",
     "pcb_prepreg2",
     "pcb_cu_bottom",
-    "tim1",
-    "solar_cells",
+    "asic",
+    "tim2",
+    "radiator",
 ]
 
 # =====================================================================
@@ -135,7 +135,7 @@ def run_simulation(
     Parameters
     ----------
     view_factor_radiator, area_factor_radiator : float
-        Radiator view factor and area multiplier for the top boundary.
+        Radiator view factor and area multiplier for the bottom boundary.
     total_time_s : float
         Duration of the simulation if ``illumination_profile`` is not provided.
     dt_s : float
@@ -162,7 +162,8 @@ def run_simulation(
         steps = int(total_time_s / dt)
         illum = np.ones(steps, dtype=int)
 
-    record_steps = [0, steps // 4, steps // 2, steps - 1]
+    n_snaps = 8  # number of snapshots to record
+    record_steps = np.linspace(0, steps - 1, n_snaps, dtype=int)
     snapshot_times = [s * dt for s in record_steps]
 
     T = np.full((ny, nx), INITIAL_T)
@@ -209,14 +210,14 @@ def run_simulation(
 
     for n in range(steps):
         bc = np.zeros_like(T)
-        q_top = -EPS_RADIATOR * view_factor_radiator * area_factor_radiator * SIGMA * (
+        q_solar = illum[n] * ALPHA_SOLAR * SOLAR_FLUX - EPS_SOLAR * SIGMA * (
             T[0, :] ** 4 - T_SPACE ** 4
         )
-        bc[0, :] += q_top / (rho[0, :] * cp[0, :] * dy)
-        q_bot = illum[n] * ALPHA_SOLAR * SOLAR_FLUX - EPS_SOLAR * SIGMA * (
+        bc[0, :] += q_solar / (rho[0, :] * cp[0, :] * dy)
+        q_radiator = -EPS_RADIATOR * view_factor_radiator * area_factor_radiator * SIGMA * (
             T[-1, :] ** 4 - T_SPACE ** 4
         )
-        bc[-1, :] += q_bot / (rho[-1, :] * cp[-1, :] * dy)
+        bc[-1, :] += q_radiator / (rho[-1, :] * cp[-1, :] * dy)
 
         lap = laplacian(T)
         B = T + 0.5 * dt * lap + dt * (src + bc)
