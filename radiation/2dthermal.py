@@ -17,7 +17,14 @@ from plot_utils import DEFAULT_FIGSIZE
 MATERIALS = {
     "solar_cells": {"thickness": 0.2, "rho": 2330.0, "cp": 700.0, "k": 150.0},
     "tim1": {"thickness": 0.2, "rho": 2200.0, "cp": 1000.0, "k": 3.0},
-    "pcb": {"thickness": 1.6, "rho": 1850.0, "cp": 900.0, "k": 0.3},
+    # 4-layer PCB stackup (1 oz copper pour)
+    "pcb_cu_top": {"thickness": 0.035, "rho": 8960.0, "cp": 385.0, "k": 400.0},
+    "pcb_prepreg1": {"thickness": 0.15, "rho": 1850.0, "cp": 900.0, "k": 0.3},
+    "pcb_cu_inner1": {"thickness": 0.035, "rho": 8960.0, "cp": 385.0, "k": 400.0},
+    "pcb_core": {"thickness": 0.8, "rho": 1850.0, "cp": 900.0, "k": 0.3},
+    "pcb_cu_inner2": {"thickness": 0.035, "rho": 8960.0, "cp": 385.0, "k": 400.0},
+    "pcb_prepreg2": {"thickness": 0.15, "rho": 1850.0, "cp": 900.0, "k": 0.3},
+    "pcb_cu_bottom": {"thickness": 0.035, "rho": 8960.0, "cp": 385.0, "k": 400.0},
     "asic": {"thickness": 1.0, "rho": 2330.0, "cp": 700.0, "k": 130.0},
     "tim2": {"thickness": 0.2, "rho": 2200.0, "cp": 1000.0, "k": 3.0},
     "radiator": {"thickness": 2.0, "rho": 2700.0, "cp": 900.0, "k": 205.0},
@@ -40,7 +47,20 @@ SIGMA = 5.670374419e-8
 INITIAL_T = 290.0
 
 # Names of the layers from top (y=0) to bottom
-LAYER_ORDER = ["solar_cells", "tim1", "pcb", "asic", "tim2", "radiator"]
+LAYER_ORDER = [
+    "solar_cells",
+    "tim1",
+    "pcb_cu_top",
+    "pcb_prepreg1",
+    "pcb_cu_inner1",
+    "pcb_core",
+    "pcb_cu_inner2",
+    "pcb_prepreg2",
+    "pcb_cu_bottom",
+    "asic",
+    "tim2",
+    "radiator",
+]
 
 # =====================================================================
 # Helper routines
@@ -69,8 +89,9 @@ def build_material_grid():
                 rho[j, :] = props["rho"]
                 cp[j, :] = props["cp"]
                 break
-    asic_y_start = boundaries[2]
-    asic_y_end = asic_y_start + MATERIALS["asic"]["thickness"]
+    asic_idx = layer_order.index("asic")
+    asic_y_start = boundaries[asic_idx]
+    asic_y_end = boundaries[asic_idx + 1]
     asic_x_start = 0.5 * (DOMAIN_WIDTH_MM - ASIC_WIDTH_MM)
     asic_x_end = asic_x_start + ASIC_WIDTH_MM
     i_start = int(asic_x_start / DX_MM)
