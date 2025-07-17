@@ -238,7 +238,7 @@ def orbit_visuals(idx: int):
         )
         # Run the 2-D thermal model for a representative snapshot
         x2d, y2d, snaps2d, final2d, stats2d, boundaries = _thermal2d.run_simulation(
-            total_time_s=4.0
+            total_time_s=0.001
         )
         thermal2d_frames = _thermal2d.temperature_frames_base64(
             x2d,
@@ -405,7 +405,7 @@ def api_simulate():
             verbose=False,
         )
         x2d, y2d, snaps2d, final2d, stats2d, boundaries = _thermal2d.run_simulation(
-            total_time_s=4.0
+            total_time_s=0.001
         )
         thermal2d_frames = _thermal2d.temperature_frames_base64(
             x2d,
@@ -694,7 +694,7 @@ if __name__ == "__main__":
     # --- quick demo run of the 2-D thermal model ---
     try:
         x, y, snaps, final_T, stats, boundaries = _thermal2d.run_simulation(
-            total_time_s=4.0
+            total_time_s=0.001
         )
         buf = _thermal2d.temperature_plot_to_buffer(
             x,

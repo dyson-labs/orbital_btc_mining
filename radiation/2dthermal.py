@@ -35,7 +35,7 @@ ASIC_POWER_W = 9.0
 DOMAIN_WIDTH_MM = 50.0
 DX_MM = 1.0
 DY_MM = 0.010
-DT_S = 0.5  # requested timestep [s] -- may be reduced for stability
+DT_S = 0.5  # desired timestep [s]; actual value capped by stability limits
 TOTAL_TIME_S = 90 * 60  # simulate one orbit (90 min)
 ALPHA_TOP = 0.9
 EPS_TOP = 0.9
@@ -135,12 +135,12 @@ def run_simulation(
     nx = len(x)
     ny = len(y)
 
-    # Calculate diffusivity and stable timestep
+    # Calculate thermal diffusivity and choose a stable timestep for the
+    # explicit scheme.  The CFL condition for a uniform grid is
+    #   dt < 0.5 / (alpha * (1/dx^2 + 1/dy^2))
     alpha = k / (rho * cp)
-    # The extremely fine vertical grid can yield a prohibitively small
-    # stability limit for an explicit scheme. Use the requested timestep
-    # directly to keep the demo manageable.
-    dt = dt_s
+    dt_max = 0.5 / (np.max(alpha) * ((1.0 / dx ** 2) + (1.0 / dy ** 2)))
+    dt = min(dt_s, dt_max)
 
     steps = int(total_time_s / dt)
     record_steps = [0, steps // 4, steps // 2, steps - 1]
@@ -172,6 +172,7 @@ def run_simulation(
         "avg_asic_K": float(np.mean(asic_temps)),
         "snapshot_times_s": snapshot_times,
         "actual_dt_s": dt,
+        "stable_dt_s": dt_max,
     }
     return x, y, snapshots, T, stats, boundaries
 
@@ -321,9 +322,10 @@ def temperature_plot_base64(x, y, temps, layer_boundaries_mm=None, times_s=None)
 
 
 if __name__ == "__main__":
-    # Short demo run so the script finishes quickly when executed directly
+    # Short demo run with a tiny total time so execution remains quick even with
+    # a very small stable timestep.
     x, y, snaps, final_T, stats, boundaries = run_simulation(
-        total_time_s=4.0,
+        total_time_s=0.001,
         dt_s=DT_S,
     )
     times = stats.get("snapshot_times_s", [])
@@ -348,3 +350,4 @@ if __name__ == "__main__":
             f.write(base64.b64decode(b64))
     print(f"Max ASIC temp: {stats['max_asic_K']:.2f} K")
     print(f"Avg ASIC temp: {stats['avg_asic_K']:.2f} K")
+    print(f"Stable dt used: {stats['actual_dt_s']:.3e} s (limit {stats['stable_dt_s']:.3e} s)")
