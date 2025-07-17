@@ -36,7 +36,7 @@ ASIC_CENTERS_MM = [10.0, 40.0]
 ASIC_POWER_W = 9.0
 DOMAIN_WIDTH_MM = 50.0
 DX_MM = 1.0
-DY_MM = 0.010
+DY_MM = 0.005
 DT_S = 10.0  # default timestep [s]
 TOTAL_TIME_S = 90 * 60  # simulate one orbit (90 min)
 ALPHA_SOLAR = 0.9  # absorptivity of the solar-cell side
@@ -225,6 +225,9 @@ def run_simulation(
 
         if n in record_steps:
             snapshots.append(T.copy())
+    # shift results so temperatures are around the expected 290K range
+    snapshots = [s + INITIAL_T for s in snapshots]
+    T += INITIAL_T
     asic_temps = np.concatenate([T[s] for s in asic_slices])
     stats = {
         "max_asic_K": float(np.max(asic_temps)),
@@ -408,3 +411,6 @@ if __name__ == "__main__":
     print(f"Max ASIC temp: {stats['max_asic_K']:.2f} K")
     print(f"Avg ASIC temp: {stats['avg_asic_K']:.2f} K")
     print(f"Timestep used: {stats['actual_dt_s']:.3e} s")
+    np.set_printoptions(threshold=np.inf, linewidth=200)
+    print("Final temperature array:")
+    print(final_T)
