@@ -1,6 +1,8 @@
 import io
 import base64
 import numpy as np
+import scipy.sparse as sp
+import scipy.sparse.linalg
 import matplotlib
 
 matplotlib.use("Agg")
@@ -18,13 +20,13 @@ MATERIALS = {
     "solar_cells": {"thickness": 0.2, "rho": 2330.0, "cp": 700.0, "k": 150.0},
     "tim1": {"thickness": 0.2, "rho": 2200.0, "cp": 1000.0, "k": 3.0},
     # 4-layer PCB stackup (2 oz copper pour)
-    "pcb_cu_top": {"thickness": 0.07, "rho": 8960.0, "cp": 385.0, "k": 400.0},
+    "pcb_cu_top": {"thickness": 0.035, "rho": 8960.0, "cp": 385.0, "k": 400.0},
     "pcb_prepreg1": {"thickness": 0.15, "rho": 1850.0, "cp": 900.0, "k": 0.3},
-    "pcb_cu_inner1": {"thickness": 0.07, "rho": 8960.0, "cp": 385.0, "k": 400.0},
+    "pcb_cu_inner1": {"thickness": 0.035, "rho": 8960.0, "cp": 385.0, "k": 400.0},
     "pcb_core": {"thickness": 0.8, "rho": 1850.0, "cp": 900.0, "k": 0.3},
-    "pcb_cu_inner2": {"thickness": 0.07, "rho": 8960.0, "cp": 385.0, "k": 400.0},
+    "pcb_cu_inner2": {"thickness": 0.035, "rho": 8960.0, "cp": 385.0, "k": 400.0},
     "pcb_prepreg2": {"thickness": 0.15, "rho": 1850.0, "cp": 900.0, "k": 0.3},
-    "pcb_cu_bottom": {"thickness": 0.07, "rho": 8960.0, "cp": 385.0, "k": 400.0},
+    "pcb_cu_bottom": {"thickness": 0.035, "rho": 8960.0, "cp": 385.0, "k": 400.0},
     "asic": {"thickness": 1.0, "rho": 2330.0, "cp": 700.0, "k": 130.0},
     "tim2": {"thickness": 0.2, "rho": 2200.0, "cp": 1000.0, "k": 3.0},
     "radiator": {"thickness": 2.0, "rho": 2700.0, "cp": 900.0, "k": 205.0},
@@ -35,22 +37,23 @@ ASIC_POWER_W = 9.0
 DOMAIN_WIDTH_MM = 50.0
 DX_MM = 1.0
 DY_MM = 0.010
-DT_S = 0.5  # desired timestep [s]; actual value capped by stability limits
-TOTAL_TIME_S = 90 * 60  # simulate one orbit (90 min)
-ALPHA_TOP = 0.9
-EPS_TOP = 0.9
-EPS_BOTTOM = 0.85
-VIEW_FACTOR_BOTTOM = 1.0
-AREA_FACTOR_BOTTOM = 1.0
+DT_S = 10.0  # default timestep [s]
+TOTAL_TIME_S = 180 * 60  # simulate at least two orbits (180 min)
+ALPHA_SOLAR = 0.9  # absorptivity of the solar-cell side
+EPS_RADIATOR = 0.9
+EPS_SOLAR = 0.85
+VIEW_FACTOR_TOP = 1.0
+AREA_FACTOR_TOP = 1.0
 T_SPACE = 3.0
 SOLAR_FLUX = 1361.0
 SIGMA = 5.670374419e-8
 INITIAL_T = 290.0
 
-# Names of the layers from top (y=0) to bottom
+# Names of the layers from top (y=0, radiator) to bottom (solar cells)
 LAYER_ORDER = [
-    "solar_cells",
-    "tim1",
+    "radiator",
+    "tim2",
+    "asic",
     "pcb_cu_top",
     "pcb_prepreg1",
     "pcb_cu_inner1",
@@ -58,9 +61,8 @@ LAYER_ORDER = [
     "pcb_cu_inner2",
     "pcb_prepreg2",
     "pcb_cu_bottom",
-    "asic",
-    "tim2",
-    "radiator",
+    "tim1",
+    "solar_cells",
 ]
 
 # =====================================================================
@@ -122,8 +124,8 @@ def build_material_grid():
 
 
 def run_simulation(
-    view_factor=VIEW_FACTOR_BOTTOM,
-    area_factor=AREA_FACTOR_BOTTOM,
+    view_factor=VIEW_FACTOR_TOP,
+    area_factor=AREA_FACTOR_TOP,
     total_time_s=TOTAL_TIME_S,
     dt_s=DT_S,
 ):
@@ -135,12 +137,8 @@ def run_simulation(
     nx = len(x)
     ny = len(y)
 
-    # Calculate thermal diffusivity and choose a stable timestep for the
-    # explicit scheme.  The CFL condition for a uniform grid is
-    #   dt < 0.5 / (alpha * (1/dx^2 + 1/dy^2))
     alpha = k / (rho * cp)
-    dt_max = 0.5 / (np.max(alpha) * ((1.0 / dx ** 2) + (1.0 / dy ** 2)))
-    dt = min(dt_s, dt_max)
+    dt = dt_s
 
     steps = int(total_time_s / dt)
     record_steps = [0, steps // 4, steps // 2, steps - 1]
@@ -150,19 +148,58 @@ def run_simulation(
     snapshots = []
     src = Q / (rho * cp)
 
-    for n in range(steps):
-        # Pad for easy finite differences (Neumann on lateral sides)
-        T_pad = np.pad(T, ((1, 1), (1, 1)), mode="edge")
-        d2Tdx2 = (T_pad[1:-1, 2:] - 2 * T + T_pad[1:-1, :-2]) / dx ** 2
-        d2Tdy2 = (T_pad[2:, 1:-1] - 2 * T + T_pad[:-2, 1:-1]) / dy ** 2
+    # Pre-build sparse matrix for Crank-Nicolson
+    N = nx * ny
+    main = np.ones(N)
+    left = np.zeros(N)
+    right = np.zeros(N)
+    up = np.zeros(N)
+    down = np.zeros(N)
 
+    def idx(j, i):
+        return j * nx + i
+
+    for j in range(ny):
+        for i in range(nx):
+            p = idx(j, i)
+            a = alpha[j, i]
+            main[p] = 1 + a * dt * (1 / dx ** 2 + 1 / dy ** 2)
+            if i > 0:
+                left[p] = -0.5 * a * dt / dx ** 2
+            if i < nx - 1:
+                right[p] = -0.5 * a * dt / dx ** 2
+            if j > 0:
+                up[p] = -0.5 * a * dt / dy ** 2
+            if j < ny - 1:
+                down[p] = -0.5 * a * dt / dy ** 2
+
+    A = sp.diags(
+        [down[nx:], left[1:], main, right[:-1], up[:-nx]],
+        offsets=[-nx, -1, 0, 1, nx],
+        shape=(N, N),
+        format="csr",
+    )
+
+    def laplacian(temp):
+        pad = np.pad(temp, ((1, 1), (1, 1)), mode="edge")
+        d2x = (pad[1:-1, 2:] - 2 * temp + pad[1:-1, :-2]) / dx ** 2
+        d2y = (pad[2:, 1:-1] - 2 * temp + pad[:-2, 1:-1]) / dy ** 2
+        return alpha * (d2x + d2y)
+
+    for n in range(steps):
         bc = np.zeros_like(T)
-        q_top = ALPHA_TOP * SOLAR_FLUX - EPS_TOP * SIGMA * (T[0, :] ** 4 - T_SPACE ** 4)
+        q_top = -EPS_RADIATOR * view_factor * area_factor * SIGMA * (
+            T[0, :] ** 4 - T_SPACE ** 4
+        )
         bc[0, :] += q_top / (rho[0, :] * cp[0, :] * dy)
-        q_bot = -EPS_BOTTOM * view_factor * area_factor * SIGMA * (T[-1, :] ** 4 - T_SPACE ** 4)
+        q_bot = ALPHA_SOLAR * SOLAR_FLUX - EPS_SOLAR * SIGMA * (
+            T[-1, :] ** 4 - T_SPACE ** 4
+        )
         bc[-1, :] += q_bot / (rho[-1, :] * cp[-1, :] * dy)
 
-        T = T + dt * (alpha * (d2Tdx2 + d2Tdy2) + src + bc)
+        lap = laplacian(T)
+        B = T + 0.5 * dt * lap + dt * (src + bc)
+        T = sp.linalg.spsolve(A, B.ravel()).reshape(ny, nx)
 
         if n in record_steps:
             snapshots.append(T.copy())
@@ -172,7 +209,6 @@ def run_simulation(
         "avg_asic_K": float(np.mean(asic_temps)),
         "snapshot_times_s": snapshot_times,
         "actual_dt_s": dt,
-        "stable_dt_s": dt_max,
     }
     return x, y, snapshots, T, stats, boundaries
 
@@ -322,10 +358,9 @@ def temperature_plot_base64(x, y, temps, layer_boundaries_mm=None, times_s=None)
 
 
 if __name__ == "__main__":
-    # Short demo run with a tiny total time so execution remains quick even with
-    # a very small stable timestep.
+    # Short demo run with a tiny total time so execution remains quick.
     x, y, snaps, final_T, stats, boundaries = run_simulation(
-        total_time_s=0.001,
+        total_time_s=DT_S,
         dt_s=DT_S,
     )
     times = stats.get("snapshot_times_s", [])
@@ -350,4 +385,4 @@ if __name__ == "__main__":
             f.write(base64.b64decode(b64))
     print(f"Max ASIC temp: {stats['max_asic_K']:.2f} K")
     print(f"Avg ASIC temp: {stats['avg_asic_K']:.2f} K")
-    print(f"Stable dt used: {stats['actual_dt_s']:.3e} s (limit {stats['stable_dt_s']:.3e} s)")
+    print(f"Timestep used: {stats['actual_dt_s']:.3e} s")
