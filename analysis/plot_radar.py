@@ -1,6 +1,10 @@
 # analysis/plot_radar.py
 import numpy as np
 import matplotlib.pyplot as plt
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from plot_utils import DEFAULT_FIGSIZE
 from math import pi
 
 # ------------------------------------------------------------------
@@ -42,7 +46,7 @@ def plot_radar(df):
     N      = len(labels)
     angles = [n / float(N) * 2 * pi for n in range(N)] + [0]
 
-    fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
+    fig, ax = plt.subplots(figsize=DEFAULT_FIGSIZE, subplot_kw=dict(polar=True))
 
     for row, name in zip(data, orbit_names):
         values = list(row) + [row[0]]
